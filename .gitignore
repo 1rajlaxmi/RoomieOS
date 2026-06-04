@@ -1,0 +1,17 @@
+# Dependency directories
+node_modules/
+frontend/node_modules/
+server/node_modules/
+
+# Production builds
+frontend/dist/
+server/dist/
+
+# Environment variables (Never push your passwords/keys!)
+.env
+frontend/.env
+server/.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
