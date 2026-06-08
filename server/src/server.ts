@@ -3,6 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
 
+// Import Routes
+import authRoutes from "./routes/authRoutes";
+
 // Load environment variables
 dotenv.config();
 
@@ -13,7 +16,10 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json()); // Allows us to parse JSON bodies
+app.use(express.json());
+
+// Routes
+app.use("/api/auth", authRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
