@@ -8,17 +8,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function Dashboard() {
   const navigate = useNavigate();
   
+  // --- STATE MANAGEMENT ---
   const [user, setUser] = useState<{ _id: string; name: string; email: string } | null>(null);
   const [household, setHousehold] = useState<any>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [chores, setChores] = useState<any[]>([]); // NEW: Chores state
   const [loading, setLoading] = useState(true);
   
+  // Form States
   const [createName, setCreateName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
+  const [choreTitle, setChoreTitle] = useState(""); // NEW: Chore title
+  const [choreAssignee, setChoreAssignee] = useState(""); // NEW: Who does the chore?
   const [error, setError] = useState("");
 
+  // --- LIFECYCLE & FETCHING ---
   useEffect(() => {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
@@ -41,19 +47,26 @@ export default function Dashboard() {
         const data = await response.json();
         setHousehold(data);
         fetchExpenses(token); 
+        fetchChores(token); // NEW: Fetch chores once household loads
       }
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   const fetchExpenses = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/expenses", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetch("http://localhost:5000/api/expenses", { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) setExpenses(await response.json());
     } catch (err) { console.error(err); }
   };
 
+  const fetchChores = async (token: string) => {
+    try {
+      const response = await fetch("http://localhost:5000/api/chores", { headers: { Authorization: `Bearer ${token}` } });
+      if (response.ok) setChores(await response.json());
+    } catch (err) { console.error(err); }
+  };
+
+  // --- HANDLERS: EXPENSES & HOUSEHOLD ---
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -72,25 +85,16 @@ export default function Dashboard() {
     } catch (err) { setError("Server error creating expense."); }
   };
 
-  // --- NEW: Handle Settling an Expense ---
   const handleSettle = async (expenseId: string, userId: string) => {
     const token = localStorage.getItem("token");
     try {
       const response = await fetch(`http://localhost:5000/api/expenses/${expenseId}/settle`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId }), // Send the ID of the roommate who paid
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId }),
       });
-
-      if (response.ok) {
-        fetchExpenses(token!); // Refresh the feed to show the green "Paid" text!
-      }
-    } catch (err) {
-      console.error("Error settling expense", err);
-    }
+      if (response.ok) fetchExpenses(token!);
+    } catch (err) { console.error("Error settling expense", err); }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -125,11 +129,41 @@ export default function Dashboard() {
     navigate("/login");
   };
 
+  // --- HANDLERS: CHORES (NEW!) ---
+  const handleAddChore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch("http://localhost:5000/api/chores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: choreTitle, assignedTo: choreAssignee }),
+      });
+      if (response.ok) {
+        setChoreTitle("");
+        setChoreAssignee("");
+        fetchChores(token!); // Refresh chore list
+      } else setError((await response.json()).message);
+    } catch (err) { setError("Server error creating chore."); }
+  };
+
+  const handleToggleChore = async (choreId: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch(`http://localhost:5000/api/chores/${choreId}/toggle`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) fetchChores(token!); // Refresh so it moves to the bottom!
+    } catch (err) { console.error("Error toggling chore", err); }
+  };
+
   if (loading || !user) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Navigation Header */}
         <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
@@ -144,15 +178,15 @@ export default function Dashboard() {
 
         {!household ? (
           <div className="grid md:grid-cols-2 gap-6">
-             {/* ... Create and Join Cards ... */}
+             {/* Create / Join Forms remain unchanged */}
              <Card><CardHeader><CardTitle>Create an Apartment</CardTitle></CardHeader><CardContent><form onSubmit={handleCreate} className="space-y-4"><div className="space-y-2"><Label>Household Name</Label><Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e)=>setCreateName(e.target.value)} /></div><Button type="submit" className="w-full bg-slate-900">Create</Button></form></CardContent></Card>
              <Card><CardHeader><CardTitle>Join via Code</CardTitle></CardHeader><CardContent><form onSubmit={handleJoin} className="space-y-4"><div className="space-y-2"><Label>Invite Code</Label><Input placeholder="e.g. A8F2K9" className="uppercase" required value={joinCode} onChange={(e)=>setJoinCode(e.target.value)} /></div><Button type="submit" className="w-full" variant="outline">Join</Button></form></CardContent></Card>
           </div>
         ) : (
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid lg:grid-cols-12 gap-6">
             
-            {/* Left Column */}
-            <div className="lg:col-span-1 space-y-6">
+            {/* --- LEFT COLUMN: Forms & Info --- */}
+            <div className="lg:col-span-4 space-y-6">
               <Card className="border-blue-100 bg-blue-50/30">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg">{household.name}</CardTitle>
@@ -160,8 +194,9 @@ export default function Dashboard() {
                 </CardHeader>
               </Card>
 
+              {/* Add Expense Form */}
               <Card>
-                <CardHeader><CardTitle>Add Expense</CardTitle></CardHeader>
+                <CardHeader className="pb-4"><CardTitle className="text-lg">Add Expense</CardTitle></CardHeader>
                 <CardContent>
                   <form onSubmit={handleAddExpense} className="space-y-4">
                     <div className="space-y-2">
@@ -177,76 +212,128 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
+              {/* NEW: Add Chore Form */}
               <Card>
-                <CardHeader><CardTitle>Roommates</CardTitle></CardHeader>
+                <CardHeader className="pb-4"><CardTitle className="text-lg">Assign Chore</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="grid gap-3">
-                    {household.members.map((member: any, index: number) => (
-                      <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 text-sm">{member.name.charAt(0).toUpperCase()}</div>
-                        <p className="font-medium text-slate-900 text-sm">{member.name} {member.email === user.email && "(You)"}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <form onSubmit={handleAddChore} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Task</Label>
+                      <Input placeholder="Take out the trash..." required value={choreTitle} onChange={(e) => setChoreTitle(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Assign to</Label>
+                      {/* Styled native select to match ShadCN inputs */}
+                      <select 
+                        className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+                        value={choreAssignee} 
+                        onChange={(e) => setChoreAssignee(e.target.value)} 
+                        required
+                      >
+                        <option value="" disabled>Select a roommate</option>
+                        {household.members.map((member: any) => (
+                          <option key={member._id} value={member._id}>
+                            {member.name} {member._id === user._id && "(You)"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button type="submit" className="w-full" variant="outline">Assign Task</Button>
+                  </form>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Right Column: Activity Feed */}
-            <div className="lg:col-span-2">
+            {/* --- MIDDLE COLUMN: Expenses Feed --- */}
+            <div className="lg:col-span-4">
               <Card className="h-full">
-                <CardHeader>
-                  <CardTitle>Recent Expenses</CardTitle>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg">Expenses</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {expenses.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">No expenses yet. Add one to get started!</div>
+                    <div className="text-center py-8 text-sm text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">No expenses yet.</div>
                   ) : (
                     <div className="space-y-4">
                       {expenses.map((expense: any) => (
-                        <div key={expense._id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col sm:flex-row justify-between gap-4">
-                          <div>
+                        <div key={expense._id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                          <div className="flex justify-between items-start">
                             <h3 className="font-semibold text-slate-900">{expense.description}</h3>
-                            <p className="text-sm text-slate-500">
-                              Paid by <span className="font-medium">{expense.paidBy.name === user.name ? "You" : expense.paidBy.name}</span>
-                            </p>
+                            <span className="font-bold text-slate-900">${expense.amount.toFixed(2)}</span>
                           </div>
+                          <p className="text-xs text-slate-500">Paid by {expense.paidBy.name === user.name ? "You" : expense.paidBy.name}</p>
                           
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm min-w-[220px]">
-                            <div className="font-semibold text-slate-900 mb-2 border-b border-slate-200 pb-1">
-                              Total: ${expense.amount.toFixed(2)}
-                            </div>
-                            <div className="space-y-2">
-                              {expense.splits.map((split: any, idx: number) => {
-                                // --- NEW: Logic to determine if we show the Settle button ---
-                                const isOwedToMe = expense.paidBy._id === user._id;
-                                const isNotMe = split.user._id !== user._id;
-                                const needsPaying = !split.isPaid;
+                          <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 text-xs space-y-1.5">
+                            {expense.splits.map((split: any, idx: number) => {
+                              const isOwedToMe = expense.paidBy._id === user._id;
+                              const isNotMe = split.user._id !== user._id;
+                              const needsPaying = !split.isPaid;
 
-                                return (
-                                  <div key={idx} className="flex justify-between items-center text-slate-600">
-                                    <span>{split.user.name === user.name ? "You" : split.user.name}:</span>
-                                    
-                                    <div className="flex items-center gap-2">
-                                      <span className={`font-medium ${split.isPaid ? "text-emerald-600" : "text-rose-600"}`}>
-                                        ${split.amountOwed.toFixed(2)} {split.isPaid && "(Paid)"}
-                                      </span>
-                                      
-                                      {/* Show "Settle" button ONLY if I paid the bill, it's not my split, and it's unpaid */}
-                                      {isOwedToMe && isNotMe && needsPaying && (
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline" 
-                                          className="h-6 text-xs px-2"
-                                          onClick={() => handleSettle(expense._id, split.user._id)}
-                                        >
-                                          Mark Paid
-                                        </Button>
-                                      )}
-                                    </div>
+                              return (
+                                <div key={idx} className="flex justify-between items-center text-slate-600">
+                                  <span>{split.user.name === user.name ? "You" : split.user.name}:</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`font-medium ${split.isPaid ? "text-emerald-600" : "text-rose-600"}`}>
+                                      ${split.amountOwed.toFixed(2)} {split.isPaid && "(Paid)"}
+                                    </span>
+                                    {isOwedToMe && isNotMe && needsPaying && (
+                                      <button onClick={() => handleSettle(expense._id, split.user._id)} className="text-slate-400 hover:text-emerald-600 font-medium underline">
+                                        Settle
+                                      </button>
+                                    )}
                                   </div>
-                                );
-                              })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* --- RIGHT COLUMN: Chores Feed --- */}
+            <div className="lg:col-span-4">
+              <Card className="h-full">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg">Chores</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {chores.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">No chores assigned!</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {chores.map((chore: any) => (
+                        <div 
+                          key={chore._id} 
+                          className={`p-3 rounded-lg border flex items-center justify-between gap-4 transition-colors ${
+                            chore.isCompleted ? "bg-slate-50 border-slate-100 opacity-60" : "bg-white border-slate-200 shadow-sm"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            {/* Checkbox Button */}
+                            <button 
+                              onClick={() => handleToggleChore(chore._id)}
+                              className={`h-5 w-5 flex-shrink-0 rounded-full border flex items-center justify-center transition-colors ${
+                                chore.isCompleted ? "bg-emerald-500 border-emerald-500" : "border-slate-300 hover:border-slate-400"
+                              }`}
+                            >
+                              {chore.isCompleted && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                            
+                            <div className="min-w-0">
+                              <p className={`text-sm font-medium truncate ${chore.isCompleted ? "text-slate-500 line-through" : "text-slate-900"}`}>
+                                {chore.title}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Assigned to: {chore.assignedTo.name === user.name ? "You" : chore.assignedTo.name}
+                              </p>
                             </div>
                           </div>
                         </div>

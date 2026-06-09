@@ -73,10 +73,9 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
 // @access  Private (Requires Token)
 export const getMyHousehold = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    // Find a household where the members array contains this user's ID
-    // We use .populate() to automatically fetch the names and emails of all roommates!
+    // REMOVED the -_id so the frontend can securely access the roommate IDs!
     const household = await Household.findOne({ members: req.user?._id })
-      .populate("members", "name email -_id"); 
+      .populate("members", "name email"); 
 
     if (!household) {
       res.status(404).json({ message: "You are not in a household yet." });
