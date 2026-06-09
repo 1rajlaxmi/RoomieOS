@@ -5,6 +5,8 @@ import connectDB from "./config/db";
 
 // Import Routes
 import authRoutes from "./routes/authRoutes";
+import householdRoutes from "./routes/householdRoutes";
+import expenseRoutes from "./routes/expenseRoutes";
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +22,8 @@ app.use(express.json());
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/households", householdRoutes);
+app.use("/api/expenses", expenseRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {
