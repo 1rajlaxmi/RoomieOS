@@ -73,3 +73,42 @@ export const getHouseholdExpenses = async (req: AuthRequest, res: Response): Pro
     res.status(500).json({ message: "Server error fetching expenses", error });
   }
 };
+
+// @desc    Mark a user's split as paid (Settle Up)
+// @route   PUT /api/expenses/:expenseId/settle
+// @access  Private
+export const settleExpense = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { expenseId } = req.params;
+    const { userId } = req.body; // The ID of the roommate who paid their debt
+
+    const expense = await Expense.findById(expenseId);
+
+    if (!expense) {
+      res.status(404).json({ message: "Expense not found." });
+      return;
+    }
+
+    // SECURITY CHECK: Only the person who originally paid the bill can mark it as settled
+    if (expense.paidBy.toString() !== req.user?._id.toString()) {
+      res.status(403).json({ message: "Only the person who paid the bill can settle this debt." });
+      return;
+    }
+
+    // Find that specific roommate in the splits array
+    const splitIndex = expense.splits.findIndex(
+      (split) => split.user.toString() === userId
+    );
+
+    if (splitIndex !== -1) {
+      // Flip their status to true!
+      expense.splits[splitIndex].isPaid = true;
+      await expense.save();
+      res.status(200).json(expense);
+    } else {
+      res.status(404).json({ message: "User not found in this expense." });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error settling expense", error });
+  }
+};
