@@ -6,18 +6,20 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { motion, AnimatePresence } from "framer-motion";
 import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key } from "lucide-react";
 
+
+
 // --- BACKGROUND ORBS & PARTICLES ---
 const BackgroundAnimation = () => (
   <div className="fixed inset-0 z-[-1] bg-[#f8fafc] overflow-hidden pointer-events-none">
     <motion.div animate={{ rotate: 360, scale: [1, 1.1, 1] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-300/20 blur-[100px]" />
     <motion.div animate={{ x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-violet-300/20 blur-[120px]" />
     {[...Array(15)].map((_, i) => (
-      <motion.div 
-        key={i} 
-        animate={{ y: ["100vh", "-10vh"], opacity: [0, 0.8, 0], x: Math.sin(i) * 50 }} 
-        transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: "linear", delay: Math.random() * 5 }} 
-        className="absolute w-1.5 h-1.5 bg-indigo-500/40 rounded-full blur-[1px]" 
-        style={{ left: `${Math.random() * 100}%` }} 
+      <motion.div
+        key={i}
+        animate={{ y: ["100vh", "-10vh"], opacity: [0, 0.8, 0], x: Math.sin(i) * 50 }}
+        transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: "linear", delay: Math.random() * 5 }}
+        className="absolute w-1.5 h-1.5 bg-indigo-500/40 rounded-full blur-[1px]"
+        style={{ left: `${Math.random() * 100}%` }}
       />
     ))}
   </div>
@@ -30,13 +32,16 @@ const hoverCard: any = { scale: 1.02, y: -5, boxShadow: "0 25px 50px -12px rgba(
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  
+
   const [user, setUser] = useState<{ _id: string; name: string; email: string } | null>(null);
   const [household, setHousehold] = useState<any>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [chores, setChores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState("");
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+
+
   // Restored missing state handlers
   const [createName, setCreateName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -44,7 +49,7 @@ export default function Dashboard() {
   const [expenseAmount, setExpenseAmount] = useState("");
   const [choreTitle, setChoreTitle] = useState("");
   const [choreAssignee, setChoreAssignee] = useState("");
-  const [error, setError] = useState("");
+
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -84,7 +89,7 @@ export default function Dashboard() {
     const token = localStorage.getItem("token");
     try {
       const response = await fetch("http://localhost:5000/api/expenses", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ description: expenseDesc, amount: Number(expenseAmount) }) });
-      if (response.ok) { setExpenseDesc(""); setExpenseAmount(""); fetchExpenses(token!); } 
+      if (response.ok) { setExpenseDesc(""); setExpenseAmount(""); fetchExpenses(token!); }
     } catch (err) { console.error(err); }
   };
 
@@ -109,13 +114,13 @@ export default function Dashboard() {
     const token = localStorage.getItem("token");
     try {
       const response = await fetch(`http://localhost:5000/api/chores/${choreId}/toggle`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
-      if (response.ok) fetchChores(token!); 
+      if (response.ok) fetchChores(token!);
     } catch (err) { console.error(err); }
   };
 
-  const handleLeaveHousehold = async () => {
-  const confirmLeave = window.confirm("Are you sure you want to leave this apartment? Your active balances will remain, but you will lose dashboard access.");
-  if (!confirmLeave) return;
+ const handleLeaveHousehold = async () => {
+  // Step A: Close the popup window first
+  setIsLeaveModalOpen(false); 
 
   const token = localStorage.getItem("token");
   try {
@@ -125,7 +130,6 @@ export default function Dashboard() {
     });
     
     if (response.ok) {
-      // Clear household state so the UI instantly switches back to Create/Join screens!
       setHousehold(null); 
       setExpenses([]);
       setChores([]);
@@ -174,41 +178,44 @@ export default function Dashboard() {
     <div className="min-h-screen font-sans flex flex-col relative overflow-clip text-slate-900">
       <BackgroundAnimation />
 
-    {/* --- STICKY NAVBAR --- */}
-<nav className="sticky top-4 z-50 mx-4 sm:mx-8">
-  <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }} className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-xl shadow-indigo-900/5 h-20 px-6 flex items-center justify-between">
-    <div className="flex items-center gap-3">
-      <div className="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2.5 rounded-2xl text-white shadow-lg"><Home size={24} strokeWidth={2.5} /></div>
-      <h1 className="text-2xl font-black tracking-tighter hidden sm:block">RoomieOS</h1>
-    </div>
-    
-    <div className="flex items-center gap-4">
-      {/* Roommate Avatars and Name Badge */}
-      <div className="hidden lg:flex items-center gap-3">
-         <div className="flex -space-x-3">
-           {household?.members.slice(0, 3).map((m: any, i: number) => (
-             <img key={i} src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-9 h-9 rounded-full border-2 border-white bg-slate-100 z-10 relative shadow-sm" alt="avatar" />
-           ))}
-         </div>
-         <div className="bg-slate-100 px-4 py-2 rounded-full flex items-center gap-2">
-           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-           <span className="text-sm font-bold text-slate-700">{user.name}</span>
-         </div>
-      </div>
+      {/* --- STICKY NAVBAR --- */}
+      <nav className="sticky top-4 z-50 mx-4 sm:mx-8">
+        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }} className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-xl shadow-indigo-900/5 h-20 px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2.5 rounded-2xl text-white shadow-lg"><Home size={24} strokeWidth={2.5} /></div>
+            <h1 className="text-2xl font-black tracking-tighter hidden sm:block">RoomieOS</h1>
+          </div>
 
-      {/* NEW: Leave Household Button (Only shows if user is actively inside a household) */}
-      {household && (
-        <button onClick={handleLeaveHousehold} className="text-sm font-bold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-4 py-2.5 rounded-full transition-all">
-          Leave Apartment
-        </button>
-      )}
+          <div className="flex items-center gap-4">
+            {/* Roommate Avatars and Name Badge */}
+            <div className="hidden lg:flex items-center gap-3">
+              <div className="flex -space-x-3">
+                {household?.members.slice(0, 3).map((m: any, i: number) => (
+                  <img key={i} src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-9 h-9 rounded-full border-2 border-white bg-slate-100 z-10 relative shadow-sm" alt="avatar" />
+                ))}
+              </div>
+              <div className="bg-slate-100 px-4 py-2 rounded-full flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-sm font-bold text-slate-700">{user.name}</span>
+              </div>
+            </div>
 
-      <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-5 py-2.5 rounded-full transition-all">
-        <LogOut size={16} /> Logout
-      </button>
-    </div>
-  </motion.div>
-</nav>
+            {/* NEW: Leave Household Button (Only shows if user is actively inside a household) */}
+            {/* Update your navbar button to this */}
+            {household && (
+              <button
+                onClick={() => setIsLeaveModalOpen(true)}
+                className="text-sm font-bold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-4 py-2.5 rounded-full transition-all"
+              >
+                Leave Apartment
+              </button>
+            )}
+            <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-5 py-2.5 rounded-full transition-all">
+              <LogOut size={16} /> Logout
+            </button>
+          </div>
+        </motion.div>
+      </nav>
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-20 w-full z-10">
@@ -217,28 +224,28 @@ export default function Dashboard() {
         {!household ? (
           // RESTORED: Premium Create/Join setups load here if the user hasn't joined an apartment
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
-             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-               <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6"><Sparkles size={28} /></div>
-               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Create Apartment</h2>
-               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/create", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: createName }) }).then(()=>fetchHousehold(t!)); }} className="space-y-4">
-                 <Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e)=>setCreateName(e.target.value)} className="h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all font-bold px-5" />
-                 <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">Create New Space <ArrowRight className="ml-2" size={20}/></Button>
-               </form>
-             </motion.div>
-             
-             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-               <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6"><Users size={28} /></div>
-               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
-               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(()=>fetchHousehold(t!)); }} className="space-y-4">
-                 <Input placeholder="A8F2K9" className="uppercase h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-bold text-center text-lg tracking-widest" required value={joinCode} onChange={(e)=>setJoinCode(e.target.value)} />
-                 <Button type="submit" className="w-full h-14 rounded-2xl bg-white text-slate-900 border-2 border-slate-200 hover:border-slate-900 font-bold text-lg transition-all active:scale-95">Join Existing</Button>
-               </form>
-             </motion.div>
+            <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6"><Sparkles size={28} /></div>
+              <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Create Apartment</h2>
+              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/create", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: createName }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
+                <Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e) => setCreateName(e.target.value)} className="h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all font-bold px-5" />
+                <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">Create New Space <ArrowRight className="ml-2" size={20} /></Button>
+              </form>
+            </motion.div>
+
+            <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+              <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6"><Users size={28} /></div>
+              <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
+              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
+                <Input placeholder="A8F2K9" className="uppercase h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-bold text-center text-lg tracking-widest" required value={joinCode} onChange={(e) => setJoinCode(e.target.value)} />
+                <Button type="submit" className="w-full h-14 rounded-2xl bg-white text-slate-900 border-2 border-slate-200 hover:border-slate-900 font-bold text-lg transition-all active:scale-95">Join Existing</Button>
+              </form>
+            </motion.div>
           </motion.div>
         ) : (
           /* FULL DASHBOARD LAYOUT */
           <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
-            
+
             {/* HERO BANNER */}
             <motion.div variants={slideUp} whileHover={hoverCard} className="relative w-full h-72 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white">
               <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2075&auto=format&fit=crop" alt="Home" className="absolute inset-0 w-full h-full object-cover" />
@@ -248,7 +255,7 @@ export default function Dashboard() {
                 <p className="text-indigo-100 font-medium mt-2 text-lg">Welcome home, {user.name}. Here is your daily overview.</p>
               </div>
               <div className="absolute top-6 right-6 md:bottom-10 md:top-auto bg-white/20 backdrop-blur-xl border border-white/40 p-4 rounded-2xl shadow-2xl flex flex-col items-center">
-                <span className="text-xs font-bold text-white/80 uppercase tracking-widest mb-1 flex items-center gap-1"><Key size={12}/> Invite Code</span>
+                <span className="text-xs font-bold text-white/80 uppercase tracking-widest mb-1 flex items-center gap-1"><Key size={12} /> Invite Code</span>
                 <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl">
                   <span className="font-mono font-black text-xl text-indigo-600 tracking-widest">{household.inviteCode}</span>
                 </div>
@@ -267,13 +274,13 @@ export default function Dashboard() {
                     <AreaChart data={expenseChartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="name" fontSize={13} tickLine={false} axisLine={false} tick={{fontWeight: 700}} />
-                      <YAxis fontSize={13} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} tick={{fontWeight: 700}} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold' }}/>
+                      <XAxis dataKey="name" fontSize={13} tickLine={false} axisLine={false} tick={{ fontWeight: 700 }} />
+                      <YAxis fontSize={13} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} tick={{ fontWeight: 700 }} />
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold' }} />
                       <Area type="monotone" dataKey="Net Paid" stroke="#6366f1" strokeWidth={5} fillOpacity={1} fill="url(#colorNet)" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -281,7 +288,7 @@ export default function Dashboard() {
               </motion.div>
 
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-                 <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3 mb-2">
                   <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Sparkles size={24} /></div>
                   <h2 className="text-2xl font-black tracking-tight">Chore Productivity</h2>
                 </div>
@@ -293,7 +300,7 @@ export default function Dashboard() {
                           <RechartsCell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', fontWeight: 'bold' }}/>
+                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', fontWeight: 'bold' }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -312,7 +319,7 @@ export default function Dashboard() {
                   <form onSubmit={handleAddExpense} className="space-y-4">
                     <Input placeholder="Groceries, Rent..." required value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
                     <Input type="number" step="0.01" min="0.01" placeholder="$0.00" required value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
-                    <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg"><Plus size={20} className="mr-2"/> Split Bill</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg"><Plus size={20} className="mr-2" /> Split Bill</motion.button>
                   </form>
                 </motion.div>
 
@@ -324,7 +331,7 @@ export default function Dashboard() {
                       <option value="" disabled>Select roommate</option>
                       {household.members.map((m: any) => <option key={m._id} value={m._id}>{m.name}</option>)}
                     </select>
-                    <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg"><CheckCircle2 size={20} className="mr-2"/> Delegate</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg"><CheckCircle2 size={20} className="mr-2" /> Delegate</motion.button>
                   </form>
                 </motion.div>
               </div>
@@ -375,8 +382,8 @@ export default function Dashboard() {
                         <div>
                           <p className={`text-xl font-black ${chore.isCompleted ? "line-through text-slate-400" : ""}`}>{chore.title}</p>
                           <div className="flex items-center gap-2 mt-1">
-                             <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo.name}`} className="w-5 h-5 rounded-full bg-emerald-100" />
-                             <p className="text-sm font-bold text-slate-500">For {chore.assignedTo.name}</p>
+                            <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo.name}`} className="w-5 h-5 rounded-full bg-emerald-100" />
+                            <p className="text-sm font-bold text-slate-500">For {chore.assignedTo.name}</p>
                           </div>
                         </div>
                       </motion.div>
@@ -407,6 +414,59 @@ export default function Dashboard() {
           </div>
         </div>
       </footer>
+      {/* --- CUSTOMIZED ANIMATED POPUP MODAL --- */}
+      <AnimatePresence>
+        {isLeaveModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            
+            {/* Dark Blurred Backdrop Layer */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLeaveModalOpen(false)} // Closes modal if you click outside
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+
+            {/* Tactile Alert Card Layer */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 250 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-md w-full relative z-10 shadow-[0_30px_70px_rgba(0,0,0,0.15)] border border-slate-100 text-center"
+            >
+              <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={32} />
+              </div>
+              
+              <h3 className="text-2xl font-black tracking-tight text-slate-900 mb-2">Leave Apartment?</h3>
+              <p className="text-slate-500 font-bold text-sm px-2 mb-8">
+                Are you sure you want to exit this space? Your outstanding balance calculations will remain, but you will lose complete access to this dashboard group.
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsLeaveModalOpen(false)}
+                  className="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
+                >
+                  Nevermind
+                </motion.button>
+                
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleLeaveHousehold}
+                  className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors shadow-lg shadow-rose-500/20"
+                >
+                  Yes, Leave
+                </motion.button>
+              </div>
+            </motion.div>
+
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

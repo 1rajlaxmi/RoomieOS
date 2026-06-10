@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion,AnimatePresence } from "framer-motion";
 import { Home, Mail, Lock, ArrowRight } from "lucide-react";
+
 
 // --- CONTINUOUS AMBIENT ANIMATIONS ---
 const BackgroundAnimation = () => (
@@ -56,7 +57,27 @@ export default function Login() {
             <p className="text-slate-500 font-bold">Log in to manage your apartment.</p>
           </div>
 
-          {error && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 bg-rose-100 text-rose-600 rounded-2xl text-center font-bold text-sm border border-rose-200">{error}</motion.div>}
+          {/* --- UPGRADED ANIMATED SHAKE ERROR --- */}
+<AnimatePresence>
+  {error && (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9, y: -10 }} 
+      animate={{ 
+        opacity: 1, 
+        scale: 1, 
+        y: 0,
+        // This makes the badge physically shake left-to-right on load!
+        x: [0, -12, 12, -12, 12, 0] 
+      }} 
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ type: "spring", duration: 0.5 }}
+      className="mb-6 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center font-bold text-sm border border-rose-100/80 shadow-sm shadow-rose-500/5 flex items-center justify-center gap-2"
+    >
+      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
+      {error}
+    </motion.div>
+  )}
+</AnimatePresence>
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="relative">
