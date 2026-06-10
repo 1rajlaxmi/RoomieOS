@@ -2,6 +2,8 @@ import { Response } from "express";
 import Chore from "../models/Chore";
 import Household from "../models/Household";
 import { AuthRequest } from "../middleware/authMiddleware";
+import sendEmail from "../utils/sendEmail";
+import User from "../models/User";
 
 // @desc    Add a new chore
 // @route   POST /api/chores
@@ -26,6 +28,21 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
       dueDate: dueDate ? new Date(dueDate) : undefined, // Convert string to proper Date format
     });
 
+    // --- NEW: SEND AUTOMATED EMAILS ---
+    const assignedUser = await User.findById(assignedTo);
+
+    // Only send an email if you assigned it to someone else (not yourself)
+    if (assignedUser && assignedUser._id.toString() !== req.user?._id.toString()) {
+      await sendEmail({
+        to: assignedUser.email,
+        subject: `[RoomieOS] New Chore Assigned: ${chore.title}`,
+        title: "🧹 It's Your Turn!",
+        body: `You have been assigned a new household task: "${chore.title}". Please log in to check it off once completed!`,
+        ctaText: "View Chores",
+        ctaLink: "http://localhost:5173"
+      });
+    }
+    // ----------------------------------
     res.status(201).json(chore);
   } catch (error) {
     res.status(500).json({ message: "Server error creating chore", error });

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -8,6 +9,7 @@ import authRoutes from "./routes/authRoutes";
 import householdRoutes from "./routes/householdRoutes";
 import expenseRoutes from "./routes/expenseRoutes";
 import choreRoutes from "./routes/choreRoutes";
+import sendEmail from "./utils/sendEmail";
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +28,29 @@ app.use("/api/auth", authRoutes);
 app.use("/api/households", householdRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/chores", choreRoutes);
+
+// --- TEMPORARY TEST ROUTE ---
+// app.get("/api/test-email", async (req, res) => {
+//   try {
+//     await sendEmail({
+//       to: "put.your.actual.email.here@gmail.com", // <-- REPLACE THIS WITH YOUR REAL EMAIL!
+//       subject: "RoomieOS Engine Test",
+//       title: "🚀 Systems Online",
+//       body: "If you are reading this, your RoomieOS email engine is fully authorized and operational. Great job!",
+//       ctaText: "Let's Deploy",
+//       ctaLink: "http://localhost:5173"
+//     });
+//     res.send("Email fired! Go check your inbox.");
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).send("Failed to send email. Check your server console.");
+//   }
+// });
+// ----------------------------
+
+// Your normal routes are down here...
+app.use("/api/auth", authRoutes);
+// ...
 
 // Basic test route
 app.get("/", (req, res) => {

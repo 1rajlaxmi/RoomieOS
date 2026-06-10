@@ -2,6 +2,8 @@ import { Response } from "express";
 import Expense from "../models/Expense";
 import Household from "../models/Household";
 import { AuthRequest } from "../middleware/authMiddleware";
+import sendEmail from "../utils/sendEmail";
+import User from "../models/User"; // We need this to get your roommates' email addresses
 
 // @desc    Add a new expense and split it equally
 // @route   POST /api/expenses
@@ -42,7 +44,26 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
       household: household._id as any,
       splits
     });
-
+    // --- NEW: SEND AUTOMATED EMAILS ---
+    // Fetch all members of the household so we can get their email addresses
+    const populatedHousehold = await Household.findById(household._id).populate("members", "name email");
+    
+    if (populatedHousehold) {
+      populatedHousehold.members.forEach(async (member: any) => {
+        // Only email the OTHER roommates, not the person who just paid
+        if (member._id.toString() !== req.user?._id.toString()) {
+          await sendEmail({
+            to: member.email,
+            subject: `[RoomieOS] New Expense: ${expense.description}`,
+            title: "💸 Bill Split Alert",
+            body: `A new bill for "${expense.description}" totaling $${expense.amount.toFixed(2)} was just added. Your split has been calculated and is ready for review.`,
+            ctaText: "View Dashboard",
+            ctaLink: "http://localhost:5173" 
+          });
+        }
+      });
+    }
+    // ----------------------------------
     res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ message: "Server error creating expense", error });
