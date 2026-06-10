@@ -134,17 +134,14 @@
   font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
-/* Beautiful Animated Background */
-@keyframes gradientBG {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+body {
+  /* Homey uses a very subtle off-white background to make the pure white cards pop */
+  background-color: #f8fafc; 
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: linear-gradient(-45deg, #f8fafc, #e0e7ff, #f3e8ff, #e2e8f0);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
-  background-attachment: fixed;
-  color: #0f172a;
+/* Custom shadow to match Homey's incredibly soft, diffused depth */
+.homey-shadow {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04), 0 2px 10px rgba(0, 0, 0, 0.02);
 }
