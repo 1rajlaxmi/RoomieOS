@@ -4,17 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Key, Copy } from "lucide-react";
+import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key } from "lucide-react";
 
-// --- CONTINUOUS AMBIENT ANIMATIONS ---
-// Orbs that spin and pulse, plus glowing particles floating upward
+// --- BACKGROUND ORBS & PARTICLES ---
 const BackgroundAnimation = () => (
   <div className="fixed inset-0 z-[-1] bg-[#f8fafc] overflow-hidden pointer-events-none">
-    {/* Spinning Ambient Orbs */}
     <motion.div animate={{ rotate: 360, scale: [1, 1.1, 1] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-300/20 blur-[100px]" />
     <motion.div animate={{ x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-violet-300/20 blur-[120px]" />
-    
-    {/* Continuous Floating Particles */}
     {[...Array(15)].map((_, i) => (
       <motion.div 
         key={i} 
@@ -28,9 +24,9 @@ const BackgroundAnimation = () => (
 );
 
 // --- ANIMATION VARIANTS ---
-const staggerContainer : any = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.15 } } };
-const slideUp : any = { hidden: { opacity: 0, y: 40 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 100 } } };
-const hoverCard : any = { scale: 1.02, y: -5, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)", transition: { type: "spring", stiffness: 300 } };
+const staggerContainer = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.15 } } };
+const slideUp: any = { hidden: { opacity: 0, y: 40 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 100 } } };
+const hoverCard: any = { scale: 1.02, y: -5, boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)", transition: { type: "spring", stiffness: 300 } };
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -41,10 +37,14 @@ export default function Dashboard() {
   const [chores, setChores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Restored missing state handlers
+  const [createName, setCreateName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [expenseDesc, setExpenseDesc] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [choreTitle, setChoreTitle] = useState("");
   const [choreAssignee, setChoreAssignee] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -113,6 +113,31 @@ export default function Dashboard() {
     } catch (err) { console.error(err); }
   };
 
+  const handleLeaveHousehold = async () => {
+  const confirmLeave = window.confirm("Are you sure you want to leave this apartment? Your active balances will remain, but you will lose dashboard access.");
+  if (!confirmLeave) return;
+
+  const token = localStorage.getItem("token");
+  try {
+    const response = await fetch("http://localhost:5000/api/households/leave", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (response.ok) {
+      // Clear household state so the UI instantly switches back to Create/Join screens!
+      setHousehold(null); 
+      setExpenses([]);
+      setChores([]);
+    } else {
+      const data = await response.json();
+      setError(data.message || "Failed to leave household.");
+    }
+  } catch (err) {
+    console.error(err);
+    setError("Server error trying to leave household.");
+  }
+};
   const handleLogout = () => { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); };
 
   const expenseChartData = useMemo(() => {
@@ -146,55 +171,82 @@ export default function Dashboard() {
   const glassCardClass = "bg-white/80 backdrop-blur-2xl rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white";
 
   return (
-    // Changed overflow-hidden to overflow-clip so sticky navbar works!
     <div className="min-h-screen font-sans flex flex-col relative overflow-clip text-slate-900">
       <BackgroundAnimation />
 
-      {/* --- STICKY NAVBAR WITH USER NAME --- */}
-      <nav className="sticky top-4 z-50 mx-4 sm:mx-8">
-        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }} className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-xl shadow-indigo-900/5 h-20 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2.5 rounded-2xl text-white shadow-lg"><Home size={24} strokeWidth={2.5} /></div>
-            <h1 className="text-2xl font-black tracking-tighter hidden sm:block">RoomieOS</h1>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-center gap-3">
-               <div className="flex -space-x-3">
-                 {household?.members.slice(0, 3).map((m: any, i: number) => (
-                   <img key={i} src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-9 h-9 rounded-full border-2 border-white bg-slate-100 z-10 relative shadow-sm" alt="avatar" />
-                 ))}
-               </div>
-               {/* User Name Added Here */}
-               <div className="bg-slate-100 px-4 py-2 rounded-full flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                 <span className="text-sm font-bold text-slate-700">{user.name}</span>
-               </div>
-            </div>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 px-5 py-2.5 rounded-full transition-all">
-              <LogOut size={16} /> Logout
-            </button>
-          </div>
-        </motion.div>
-      </nav>
+    {/* --- STICKY NAVBAR --- */}
+<nav className="sticky top-4 z-50 mx-4 sm:mx-8">
+  <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }} className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-xl shadow-indigo-900/5 h-20 px-6 flex items-center justify-between">
+    <div className="flex items-center gap-3">
+      <div className="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2.5 rounded-2xl text-white shadow-lg"><Home size={24} strokeWidth={2.5} /></div>
+      <h1 className="text-2xl font-black tracking-tighter hidden sm:block">RoomieOS</h1>
+    </div>
+    
+    <div className="flex items-center gap-4">
+      {/* Roommate Avatars and Name Badge */}
+      <div className="hidden lg:flex items-center gap-3">
+         <div className="flex -space-x-3">
+           {household?.members.slice(0, 3).map((m: any, i: number) => (
+             <img key={i} src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-9 h-9 rounded-full border-2 border-white bg-slate-100 z-10 relative shadow-sm" alt="avatar" />
+           ))}
+         </div>
+         <div className="bg-slate-100 px-4 py-2 rounded-full flex items-center gap-2">
+           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+           <span className="text-sm font-bold text-slate-700">{user.name}</span>
+         </div>
+      </div>
 
-      {/* MAIN LAYOUT */}
+      {/* NEW: Leave Household Button (Only shows if user is actively inside a household) */}
+      {household && (
+        <button onClick={handleLeaveHousehold} className="text-sm font-bold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-4 py-2.5 rounded-full transition-all">
+          Leave Apartment
+        </button>
+      )}
+
+      <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-5 py-2.5 rounded-full transition-all">
+        <LogOut size={16} /> Logout
+      </button>
+    </div>
+  </motion.div>
+</nav>
+
+      {/* MAIN CONTENT AREA */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-20 w-full z-10">
+        {error && <div className="mb-8 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center font-bold text-sm">{error}</div>}
+
         {!household ? (
-          <div className="text-center py-20"><h2 className="text-3xl font-black">You need to join a household first!</h2></div>
+          // RESTORED: Premium Create/Join setups load here if the user hasn't joined an apartment
+          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
+             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+               <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6"><Sparkles size={28} /></div>
+               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Create Apartment</h2>
+               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/create", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: createName }) }).then(()=>fetchHousehold(t!)); }} className="space-y-4">
+                 <Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e)=>setCreateName(e.target.value)} className="h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all font-bold px-5" />
+                 <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">Create New Space <ArrowRight className="ml-2" size={20}/></Button>
+               </form>
+             </motion.div>
+             
+             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+               <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6"><Users size={28} /></div>
+               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
+               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(()=>fetchHousehold(t!)); }} className="space-y-4">
+                 <Input placeholder="A8F2K9" className="uppercase h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-bold text-center text-lg tracking-widest" required value={joinCode} onChange={(e)=>setJoinCode(e.target.value)} />
+                 <Button type="submit" className="w-full h-14 rounded-2xl bg-white text-slate-900 border-2 border-slate-200 hover:border-slate-900 font-bold text-lg transition-all active:scale-95">Join Existing</Button>
+               </form>
+             </motion.div>
+          </motion.div>
         ) : (
+          /* FULL DASHBOARD LAYOUT */
           <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
             
-            {/* 1. HERO IMAGE BANNER & PROMINENT INVITE CODE */}
+            {/* HERO BANNER */}
             <motion.div variants={slideUp} whileHover={hoverCard} className="relative w-full h-72 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white">
               <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2075&auto=format&fit=crop" alt="Home" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-transparent"></div>
-              
               <div className="absolute inset-0 p-10 flex flex-col justify-end w-full md:w-2/3">
                 <h1 className="text-5xl font-black text-white tracking-tighter drop-shadow-lg">{household.name}</h1>
                 <p className="text-indigo-100 font-medium mt-2 text-lg">Welcome home, {user.name}. Here is your daily overview.</p>
               </div>
-
-              {/* Prominent Invite Code Ticket */}
               <div className="absolute top-6 right-6 md:bottom-10 md:top-auto bg-white/20 backdrop-blur-xl border border-white/40 p-4 rounded-2xl shadow-2xl flex flex-col items-center">
                 <span className="text-xs font-bold text-white/80 uppercase tracking-widest mb-1 flex items-center gap-1"><Key size={12}/> Invite Code</span>
                 <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl">
@@ -203,9 +255,8 @@ export default function Dashboard() {
               </div>
             </motion.div>
 
-            {/* 2. DUAL CHARTS ROW */}
+            {/* CHARTS */}
             <div className="grid lg:grid-cols-2 gap-8">
-              {/* Chart 1: Finances */}
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl"><Wallet size={24} /></div>
@@ -229,7 +280,6 @@ export default function Dashboard() {
                 </div>
               </motion.div>
 
-              {/* Chart 2: Chore Productivity */}
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                  <div className="flex items-center gap-3 mb-2">
                   <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Sparkles size={24} /></div>
@@ -246,7 +296,6 @@ export default function Dashboard() {
                       <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', fontWeight: 'bold' }}/>
                     </PieChart>
                   </ResponsiveContainer>
-                  {/* Center Text in Donut */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-4xl font-black text-slate-900">{chores.length}</span>
                     <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
@@ -255,10 +304,8 @@ export default function Dashboard() {
               </motion.div>
             </div>
 
-            {/* 3. FORMS & FEEDS */}
+            {/* ACTION TOOLS & FEEDS */}
             <div className="grid lg:grid-cols-12 gap-8">
-              
-              {/* Add Tools Column */}
               <div className="lg:col-span-4 space-y-8">
                 <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                   <h2 className="text-xl font-black mb-6">Add Expense</h2>
@@ -282,9 +329,7 @@ export default function Dashboard() {
                 </motion.div>
               </div>
 
-              {/* Feed Column */}
               <div className="lg:col-span-8 space-y-8">
-                {/* Expense Feed */}
                 <motion.div variants={slideUp} className="space-y-4">
                   <h2 className="text-2xl font-black flex items-center gap-2"><Activity className="text-indigo-500" /> Recent Activity</h2>
                   <AnimatePresence>
@@ -319,7 +364,6 @@ export default function Dashboard() {
                   </AnimatePresence>
                 </motion.div>
 
-                {/* Chores Feed */}
                 <motion.div variants={slideUp} className="space-y-4">
                   <h2 className="text-2xl font-black flex items-center gap-2"><Trash2 className="text-emerald-500" /> Pending Tasks</h2>
                   <AnimatePresence>
@@ -345,8 +389,8 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* --- PROMINENT FOOTER --- */}
-      <footer className="w-full bg-white/70 backdrop-blur-2xl border-t border-white mt-auto py-8">
+      {/* FIXED FOOTER */}
+      <footer className="w-full bg-white/70 backdrop-blur-2xl border-t border-white mt-auto py-8 z-10">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white"><Home size={20} /></div>

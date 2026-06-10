@@ -87,3 +87,37 @@ export const getMyHousehold = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ message: "Server error fetching household", error });
   }
 };
+// @desc    Leave the current household
+// @route   PUT /api/households/leave
+// @access  Private
+export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?._id;
+
+    // Safety guard: Prove to TypeScript that userId is NOT undefined
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized. User ID not found." });
+      return;
+    }
+
+    // Find the household that contains this user
+    const household = await Household.findOne({ members: userId });
+
+    if (!household) {
+      res.status(404).json({ message: "You are not currently in a household." });
+      return;
+    }
+
+    // This will now compile cleanly with no red squiggles!
+    household.members = household.members.filter(
+      (memberId: any) => memberId.toString() !== userId.toString()
+    );
+
+    // Save the updated household
+    await household.save();
+
+    res.status(200).json({ message: "Successfully left the household." });
+  } catch (error) {
+    res.status(500).json({ message: "Server error leaving household", error });
+  }
+};
