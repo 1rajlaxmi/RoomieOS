@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key } from "lucide-react";
 
@@ -264,28 +264,102 @@ export default function Dashboard() {
 
             {/* CHARTS */}
             <div className="grid lg:grid-cols-2 gap-8">
-              <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl"><Wallet size={24} /></div>
-                  <h2 className="text-2xl font-black tracking-tight">Financial Balance</h2>
+ {/* --- UPGRADED TECH-STYLE BI-DIRECTIONAL BAR CHART --- */}
+<motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+  <div className="flex items-center justify-between mb-6">
+    <div className="flex items-center gap-3">
+      <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-md">
+        <Wallet size={24} />
+      </div>
+      <div>
+        <h2 className="text-2xl font-black tracking-tight text-slate-900">Financial Balance</h2>
+        <p className="text-xs font-bold text-slate-400 mt-0.5">Who owes vs. who is owed</p>
+      </div>
+    </div>
+    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100/50">
+      Live Ledger
+    </span>
+  </div>
+  
+  <div className="h-64 w-full">
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+        <defs>
+          {/* Glowing Neon Emerald Gradient for Positive Balances */}
+          <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+          
+          {/* Vibrant Sunset Rose Gradient for Negative Balances */}
+          <linearGradient id="negGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#f43f5e" />
+            <stop offset="100%" stopColor="#e11d48" />
+          </linearGradient>
+        </defs>
+
+        {/* Subtle cross-hair guide grids */}
+        <XAxis 
+          dataKey="name" 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false} 
+          tick={{ fontWeight: 800, fill: '#64748b' }}
+          dy={10}
+        />
+        <YAxis 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false} 
+          tickFormatter={(val) => `$${val}`} 
+          tick={{ fontWeight: 800, fill: '#64748b' }}
+        />
+        
+        {/* The Baseline Divider */}
+        <text x="0" y="0" className="hidden" /> 
+        
+        {/* Dark Premium HUD Glass Tooltip */}
+        <Tooltip 
+          cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }}
+          content={({ active, payload }) => {
+            if (active && payload && payload.length) {
+              const val = Number(payload[0].value);
+              return (
+                <div className="bg-slate-950/95 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-2xl text-white font-sans">
+                  <p className="text-xs font-bold text-slate-400 mb-1">{payload[0].payload.name}</p>
+                  <p className="text-lg font-black tracking-tight">
+                    <span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                      {val >= 0 ? `Owed: +$${val.toFixed(2)}` : `Owes: -$${Math.abs(val).toFixed(2)}`}
+                    </span>
+                  </p>
                 </div>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={expenseChartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="name" fontSize={13} tickLine={false} axisLine={false} tick={{ fontWeight: 700 }} />
-                      <YAxis fontSize={13} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val}`} tick={{ fontWeight: 700 }} />
-                      <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', fontWeight: 'bold' }} />
-                      <Area type="monotone" dataKey="Net Paid" stroke="#6366f1" strokeWidth={5} fillOpacity={1} fill="url(#colorNet)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+              );
+            }
+            return null;
+          }}
+        />
+
+        {/* Dynamic Equalizer Bar Layer */}
+        <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]}>
+          {expenseChartData.map((entry: any, index: number) => {
+            const isPositive = entry["Net Paid"] >= 0;
+            return (
+              <RechartsCell 
+                key={`cell-${index}`} 
+                fill={isPositive ? "url(#posGradient)" : "url(#negGradient)"} 
+                style={{
+                  filter: isPositive 
+                    ? 'drop-shadow(0px 6px 12px rgba(16, 185, 129, 0.2))' 
+                    : 'drop-shadow(0px 6px 12px rgba(244, 63, 94, 0.2))'
+                }}
+              />
+            );
+          })}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</motion.div>
 
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                 <div className="flex items-center gap-3 mb-2">

@@ -23,6 +23,17 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(""); // Clear any previous errors
+
+    // --- NEW: FRONTEND PASSWORD CHECK ---
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasNumber = /\d/.test(password);
+
+    if (password.length < 8 || !hasLetter || !hasNumber) {
+      setError("Password must be at least 8 characters and include letters & numbers.");
+      return; // Stops the function here so no API request is sent!
+    }
+    // ------------------------------------
     try {
       const response = await fetch("http://localhost:5000/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json" },

@@ -14,7 +14,20 @@ const generateToken = (id: string) => {
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password } = req.body;
+    // --- NEW: PASSWORD RESTRICTION RULES ---
+    if (password.length < 8) {
+      res.status(400).json({ message: "Password must be at least 8 characters long." });
+      return;
+    }
 
+    const hasLetter = /[a-zA-Z]/.test(password);
+    const hasNumber = /\d/.test(password);
+
+    if (!hasLetter || !hasNumber) {
+      res.status(400).json({ message: "Password must contain both letters and numbers." });
+      return;
+    }
+    // ----------------------------------------
     // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
