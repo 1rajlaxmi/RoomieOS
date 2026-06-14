@@ -78,6 +78,7 @@ export const getHouseholdChores = async (req: AuthRequest, res: Response): Promi
 export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { choreId } = req.params;
+    const userId = req.user?._id;
 
     const chore = await Chore.findById(choreId);
 
@@ -85,6 +86,20 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
       res.status(404).json({ message: "Chore not found." });
       return;
     }
+
+    // --- NEW: ACCOUNTABILITY GUARD LAYER ---
+    // Safety check to ensure userId exists from the token
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized. User ID not found." });
+      return;
+    }
+
+    // Compare the assigned roommate's ID to the logged-in user's ID
+    if (chore.assignedTo.toString() !== userId.toString()) {
+      res.status(403).json({ message: "You can only mark your own assigned tasks as completed!" });
+      return;
+    }
+    // ---------------------------------------
 
     // Flip the boolean value (if true -> false, if false -> true)
     chore.isCompleted = !chore.isCompleted;

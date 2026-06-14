@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key } from "lucide-react";
+import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key, ChevronDown } from "lucide-react";
 
 
 
@@ -40,6 +40,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isChoreDropdownOpen, setIsChoreDropdownOpen] = useState(false); // <-- NEW: Dropdown visibility state
+  const [choreError, setChoreError] = useState(""); // <-- NEW: Explicit chore error state
+  const [choreFeedError, setChoreFeedError] = useState(""); // <-- NEW: Catch toggle violations
 
 
   // Restored missing state handlers
@@ -100,48 +103,83 @@ export default function Dashboard() {
       if (response.ok) fetchExpenses(token!);
     } catch (err) { console.error(err); }
   };
-
   const handleAddChore = async (e: React.FormEvent) => {
     e.preventDefault();
+    setChoreError(""); // Clear any old chore errors on new attempt
+
+    if (!choreAssignee) {
+      setChoreError("Please choose a roommate to delegate this task to.");
+      return;
+    }
+
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/chores", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: choreTitle, assignedTo: choreAssignee }) });
-      if (response.ok) { setChoreTitle(""); setChoreAssignee(""); fetchChores(token!); }
-    } catch (err) { console.error(err); }
+      const response = await fetch("http://localhost:5000/api/chores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: choreTitle, assignedTo: choreAssignee })
+      });
+      if (response.ok) {
+        setChoreTitle("");
+        setChoreAssignee("");
+        setChoreError(""); // <-- Clear on success!
+        fetchChores(token!);
+      } else {
+        const data = await response.json();
+        setChoreError(data.message || "Failed to assign task.");
+      }
+    } catch (err) {
+      console.error(err);
+      setChoreError("Server error trying to assign task.");
+    }
   };
 
   const handleToggleChore = async (choreId: string) => {
+    setChoreFeedError(""); // Reset any prior feed errors
     const token = localStorage.getItem("token");
+
     try {
-      const response = await fetch(`http://localhost:5000/api/chores/${choreId}/toggle`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
-      if (response.ok) fetchChores(token!);
-    } catch (err) { console.error(err); }
+      const response = await fetch(`http://localhost:5000/api/chores/${choreId}/toggle`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        fetchChores(token!);
+      } else {
+        const data = await response.json();
+        // Set the error message if the backend rejects the toggle
+        setChoreFeedError(data.message || "Unauthorized action.");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
- const handleLeaveHousehold = async () => {
-  // Step A: Close the popup window first
-  setIsLeaveModalOpen(false); 
+  const handleLeaveHousehold = async () => {
+    // Step A: Close the popup window first
+    setIsLeaveModalOpen(false);
 
-  const token = localStorage.getItem("token");
-  try {
-    const response = await fetch("http://localhost:5000/api/households/leave", {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      setHousehold(null); 
-      setExpenses([]);
-      setChores([]);
-    } else {
-      const data = await response.json();
-      setError(data.message || "Failed to leave household.");
+    const token = localStorage.getItem("token");
+    try {
+      const response = await fetch("http://localhost:5000/api/households/leave", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setHousehold(null);
+        setExpenses([]);
+        setChores([]);
+      } else {
+        const data = await response.json();
+        setError(data.message || "Failed to leave household.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Server error trying to leave household.");
     }
-  } catch (err) {
-    console.error(err);
-    setError("Server error trying to leave household.");
-  }
-};
+  };
   const handleLogout = () => { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); };
 
   const expenseChartData = useMemo(() => {
@@ -238,7 +276,7 @@ export default function Dashboard() {
               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
                 <Input placeholder="A8F2K9" className="uppercase h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-bold text-center text-lg tracking-widest" required value={joinCode} onChange={(e) => setJoinCode(e.target.value)} />
-                <Button type="submit" className="w-full h-14 rounded-2xl bg-white text-slate-900 border-2 border-slate-200 hover:border-slate-900 font-bold text-lg transition-all active:scale-95">Join Existing</Button>
+                <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">Join Existing</Button>
               </form>
             </motion.div>
           </motion.div>
@@ -264,102 +302,101 @@ export default function Dashboard() {
 
             {/* CHARTS */}
             <div className="grid lg:grid-cols-2 gap-8">
- {/* --- UPGRADED TECH-STYLE BI-DIRECTIONAL BAR CHART --- */}
-<motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-  <div className="flex items-center justify-between mb-6">
-    <div className="flex items-center gap-3">
-      <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-md">
-        <Wallet size={24} />
-      </div>
-      <div>
-        <h2 className="text-2xl font-black tracking-tight text-slate-900">Financial Balance</h2>
-        <p className="text-xs font-bold text-slate-400 mt-0.5">Who owes vs. who is owed</p>
-      </div>
-    </div>
-    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100/50">
-      Live Ledger
-    </span>
-  </div>
-  
-  <div className="h-64 w-full">
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-        <defs>
-          {/* Glowing Neon Emerald Gradient for Positive Balances */}
-          <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10b981" />
-            <stop offset="100%" stopColor="#059669" />
-          </linearGradient>
-          
-          {/* Vibrant Sunset Rose Gradient for Negative Balances */}
-          <linearGradient id="negGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f43f5e" />
-            <stop offset="100%" stopColor="#e11d48" />
-          </linearGradient>
-        </defs>
-
-        {/* Subtle cross-hair guide grids */}
-        <XAxis 
-          dataKey="name" 
-          fontSize={12} 
-          tickLine={false} 
-          axisLine={false} 
-          tick={{ fontWeight: 800, fill: '#64748b' }}
-          dy={10}
-        />
-        <YAxis 
-          fontSize={12} 
-          tickLine={false} 
-          axisLine={false} 
-          tickFormatter={(val) => `$${val}`} 
-          tick={{ fontWeight: 800, fill: '#64748b' }}
-        />
-        
-        {/* The Baseline Divider */}
-        <text x="0" y="0" className="hidden" /> 
-        
-        {/* Dark Premium HUD Glass Tooltip */}
-        <Tooltip 
-          cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }}
-          content={({ active, payload }) => {
-            if (active && payload && payload.length) {
-              const val = Number(payload[0].value);
-              return (
-                <div className="bg-slate-950/95 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-2xl text-white font-sans">
-                  <p className="text-xs font-bold text-slate-400 mb-1">{payload[0].payload.name}</p>
-                  <p className="text-lg font-black tracking-tight">
-                    <span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                      {val >= 0 ? `Owed: +$${val.toFixed(2)}` : `Owes: -$${Math.abs(val).toFixed(2)}`}
-                    </span>
-                  </p>
+              {/* --- UPGRADED TECH-STYLE BI-DIRECTIONAL BAR CHART --- */}
+              <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-md">
+                      <Wallet size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black tracking-tight text-slate-900">Financial Balance</h2>
+                      <p className="text-xs font-bold text-slate-400 mt-0.5">Who owes vs. who is owed</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100/50">
+                    Live Ledger
+                  </span>
                 </div>
-              );
-            }
-            return null;
-          }}
-        />
 
-        {/* Dynamic Equalizer Bar Layer */}
-        <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]}>
-          {expenseChartData.map((entry: any, index: number) => {
-            const isPositive = entry["Net Paid"] >= 0;
-            return (
-              <RechartsCell 
-                key={`cell-${index}`} 
-                fill={isPositive ? "url(#posGradient)" : "url(#negGradient)"} 
-                style={{
-                  filter: isPositive 
-                    ? 'drop-shadow(0px 6px 12px rgba(16, 185, 129, 0.2))' 
-                    : 'drop-shadow(0px 6px 12px rgba(244, 63, 94, 0.2))'
-                }}
-              />
-            );
-          })}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-</motion.div>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                      <defs>
+                        {/* Glowing Neon Emerald Gradient for Positive Balances */}
+                        <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" />
+                          <stop offset="100%" stopColor="#059669" />
+                        </linearGradient>
+
+                        {/* Vibrant Sunset Rose Gradient for Negative Balances */}
+                        <linearGradient id="negGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f43f5e" />
+                          <stop offset="100%" stopColor="#e11d48" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Subtle cross-hair guide grids */}
+                      <XAxis
+                        dataKey="name"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontWeight: 800, fill: '#64748b' }}
+                        dy={10}
+                      />
+                      {/* Change YAxis tick formatter to Rupees */}
+                      <YAxis
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => `₹${val}`} // <-- CHANGED HERE
+                        tick={{ fontWeight: 800, fill: '#64748b' }}
+                      />
+
+                      {/* Change Tooltip payload string to Rupees */}
+                      <Tooltip
+                        cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const val = Number(payload[0].value);
+                            return (
+                              <div className="bg-slate-950/95 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-2xl text-white font-sans">
+                                <p className="text-xs font-bold text-slate-400 mb-1">{payload[0].payload.name}</p>
+                                <p className="text-lg font-black tracking-tight">
+                                  <span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                                    {/* CHANGED SYMBOLS BELOW */}
+                                    {val >= 0 ? `Owed: +₹${val.toFixed(2)}` : `Owes: -₹${Math.abs(val).toFixed(2)}`}
+                                  </span>
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+
+                      {/* Dynamic Equalizer Bar Layer */}
+                      <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]}>
+                        {expenseChartData.map((entry: any, index: number) => {
+                          const isPositive = entry["Net Paid"] >= 0;
+                          return (
+                            <RechartsCell
+                              key={`cell-${index}`}
+                              fill={isPositive ? "url(#posGradient)" : "url(#negGradient)"}
+                              style={{
+                                filter: isPositive
+                                  ? 'drop-shadow(0px 6px 12px rgba(16, 185, 129, 0.2))'
+                                  : 'drop-shadow(0px 6px 12px rgba(244, 63, 94, 0.2))'
+                              }}
+                            />
+                          );
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
 
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                 <div className="flex items-center gap-3 mb-2">
@@ -392,7 +429,7 @@ export default function Dashboard() {
                   <h2 className="text-xl font-black mb-6">Add Expense</h2>
                   <form onSubmit={handleAddExpense} className="space-y-4">
                     <Input placeholder="Groceries, Rent..." required value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
-                    <Input type="number" step="0.01" min="0.01" placeholder="$0.00" required value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
+                    <Input type="number" step="0.01" min="0.01" placeholder="₹0.00" required value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
                     <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg"><Plus size={20} className="mr-2" /> Split Bill</motion.button>
                   </form>
                 </motion.div>
@@ -401,12 +438,96 @@ export default function Dashboard() {
                   <h2 className="text-xl font-black mb-6">Assign Task</h2>
                   <form onSubmit={handleAddChore} className="space-y-4">
                     <Input placeholder="Vacuum the rug..." required value={choreTitle} onChange={(e) => setChoreTitle(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent focus:ring-2 focus:ring-emerald-500 font-bold px-5" />
-                    <select className="flex h-14 w-full rounded-2xl bg-slate-50 border-transparent px-5 font-bold focus:ring-2 focus:ring-emerald-500" value={choreAssignee} onChange={(e) => setChoreAssignee(e.target.value)} required>
-                      <option value="" disabled>Select roommate</option>
-                      {household.members.map((m: any) => <option key={m._id} value={m._id}>{m.name}</option>)}
-                    </select>
+                    {/* --- UPGRADED CUSTOM THEMED DROPDOWN --- */}
+                    <div className="relative">
+                      {/* Dropdown Trigger Box */}
+                      <div
+                        onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)}
+                        className="flex h-14 w-full rounded-2xl bg-slate-50 border border-transparent items-center justify-between px-5 font-bold cursor-pointer hover:bg-slate-100 transition-colors select-none text-slate-700"
+                      >
+                        <div className="flex items-center gap-3">
+                          {choreAssignee ? (
+                            // Find the active roommate configuration data dynamically to print info
+                            (() => {
+                              const selectedObj = household.members.find((m: any) => m._id === choreAssignee);
+                              return selectedObj ? (
+                                <>
+                                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${selectedObj.name}`} className="w-6 h-6 rounded-full bg-slate-200" alt="avatar" />
+                                  <span>{selectedObj.name}</span>
+                                </>
+                              ) : <span className="text-slate-400">Select roommate</span>;
+                            })()
+                          ) : (
+                            <span className="text-slate-400">Select roommate</span>
+                          )}
+                        </div>
+
+                        {/* Animated Arrow indicator pivot */}
+                        <motion.div
+                          animate={{ rotate: isChoreDropdownOpen ? 180 : 0 }}
+                          transition={{ type: "spring", stiffness: 250, damping: 20 }}
+                          className="text-slate-400"
+                        >
+                          <ChevronDown size={20} />
+                        </motion.div>
+                      </div>
+
+                      {/* Custom Glassmorphic Dropdown Drawer Panel */}
+                      <AnimatePresence>
+                        {isChoreDropdownOpen && (
+                          <>
+                            {/* Invisible closing sheet background mask */}
+                            <div className="fixed inset-0 z-40" onClick={() => setIsChoreDropdownOpen(false)} />
+
+                            <motion.div
+                              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                              transition={{ type: "spring", duration: 0.3 }}
+                              className="absolute z-50 left-0 right-0 mt-2 bg-white/90 backdrop-blur-2xl rounded-2xl border border-white shadow-2xl overflow-hidden max-h-56 overflow-y-auto"
+                            >
+                              {household.members.map((member: any) => (
+                                <div
+                                  key={member._id}
+                                  onClick={() => {
+                                    setChoreAssignee(member._id);
+                                    setIsChoreDropdownOpen(false);
+                                  }}
+                                  className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-colors text-slate-700
+                ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50"}
+              `}
+                                >
+                                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
+                                  <span className="text-sm">{member.name}</span>
+                                </div>
+                              ))}
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg"><CheckCircle2 size={20} className="mr-2" /> Delegate</motion.button>
                   </form>
+                  {/* --- NEW: CONTEXTUAL INLINE SHAKE ERROR --- */}
+                  <AnimatePresence>
+                    {choreError && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                          scale: 1,
+                          x: [0, -8, 8, -8, 8, 0] // Soft inline shake motion
+                        }}
+                        exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                        transition={{ type: "spring", duration: 0.4 }}
+                        className="mt-4 p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs text-center border border-rose-100/60 shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
+                        {choreError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               </div>
 
@@ -424,7 +545,7 @@ export default function Dashboard() {
                               <p className="text-sm font-bold text-slate-500">Paid by {expense.paidBy.name === user.name ? "You" : expense.paidBy.name}</p>
                             </div>
                           </div>
-                          <span className="font-black text-2xl">${expense.amount.toFixed(2)}</span>
+                          <span className="font-black text-2xl">₹{expense.amount.toFixed(2)}</span>
                         </div>
                         <div className="bg-slate-50 rounded-2xl p-2 space-y-1">
                           {expense.splits.map((split: any, idx: number) => {
@@ -433,7 +554,10 @@ export default function Dashboard() {
                               <div key={idx} className="flex justify-between items-center p-3 font-bold bg-white rounded-xl shadow-sm">
                                 <span>{split.user.name}</span>
                                 <div className="flex items-center gap-3">
-                                  <span className={split.isPaid ? "text-emerald-500" : "text-slate-900"}>${split.amountOwed.toFixed(2)} {split.isPaid && "✓"}</span>
+                                  {/* Roommate Breakdown Currency Change */}
+                                  <span className={split.isPaid ? "text-emerald-500" : "text-slate-900"}>
+                                    ₹{split.amountOwed.toFixed(2)} {split.isPaid && "✓"} {/* <-- CHANGED HERE */}
+                                  </span>
                                   {needsPaying && <motion.button whileTap={{ scale: 0.9 }} onClick={() => handleSettle(expense._id, split.user._id)} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm">Settle</motion.button>}
                                 </div>
                               </div>
@@ -448,6 +572,20 @@ export default function Dashboard() {
                 <motion.div variants={slideUp} className="space-y-4">
                   <h2 className="text-2xl font-black flex items-center gap-2"><Trash2 className="text-emerald-500" /> Pending Tasks</h2>
                   <AnimatePresence>
+                    {/* NEW: POPUP FEED ERROR WARNING */}
+                    <AnimatePresence>
+                      {choreFeedError && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0, x: [0, -10, 10, -10, 10, 0] }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.4 }}
+                          className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl border border-amber-200/60 shadow-sm text-center"
+                        >
+                          ⚠️ {choreFeedError}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     {chores.map((chore: any) => (
                       <motion.div key={chore._id} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} whileHover={hoverCard} className={glassCardClass + ` !p-5 flex items-center gap-5 ${chore.isCompleted ? "opacity-50" : ""}`}>
                         <motion.button whileTap={{ scale: 0.8, rotate: 180 }} onClick={() => handleToggleChore(chore._id)} className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center transition-colors ${chore.isCompleted ? "bg-emerald-500 border-emerald-500" : "border-slate-300 bg-slate-50"}`}>
@@ -492,9 +630,9 @@ export default function Dashboard() {
       <AnimatePresence>
         {isLeaveModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            
+
             {/* Dark Blurred Backdrop Layer */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -503,7 +641,7 @@ export default function Dashboard() {
             />
 
             {/* Tactile Alert Card Layer */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -513,22 +651,22 @@ export default function Dashboard() {
               <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <Trash2 size={32} />
               </div>
-              
+
               <h3 className="text-2xl font-black tracking-tight text-slate-900 mb-2">Leave Apartment?</h3>
               <p className="text-slate-500 font-bold text-sm px-2 mb-8">
                 Are you sure you want to exit this space? Your outstanding balance calculations will remain, but you will lose complete access to this dashboard group.
               </p>
 
               <div className="grid grid-cols-2 gap-4">
-                <motion.button 
+                <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setIsLeaveModalOpen(false)}
                   className="h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
                 >
                   Nevermind
                 </motion.button>
-                
-                <motion.button 
+
+                <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={handleLeaveHousehold}
                   className="h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-colors shadow-lg shadow-rose-500/20"
