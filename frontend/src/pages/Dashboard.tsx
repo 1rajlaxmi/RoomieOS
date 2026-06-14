@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell as RechartsCell } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
-import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key, ChevronDown } from "lucide-react";
-
+import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, Star, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
 
 
 // --- BACKGROUND ORBS & PARTICLES ---
@@ -52,6 +51,17 @@ export default function Dashboard() {
   const [expenseAmount, setExpenseAmount] = useState("");
   const [choreTitle, setChoreTitle] = useState("");
   const [choreAssignee, setChoreAssignee] = useState("");
+
+  const handlePasteCode = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      // Clean up the string: remove spaces and automatically convert to uppercase
+      setJoinCode(text.trim().toUpperCase());
+    } catch (err) {
+      console.error("Failed to read clipboard text: ", err);
+      setError("Please allow clipboard permissions to paste automatically.");
+    }
+  };
 
 
   useEffect(() => {
@@ -272,11 +282,36 @@ export default function Dashboard() {
             </motion.div>
 
             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-              <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6"><Users size={28} /></div>
+              <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6">
+                <Users size={28} />
+              </div>
+
               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
+
               <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
-                <Input placeholder="A8F2K9" className="uppercase h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-bold text-center text-lg tracking-widest" required value={joinCode} onChange={(e) => setJoinCode(e.target.value)} />
-                <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">Join Existing</Button>
+
+                {/* UPGRADED RELATIVE CONTAINER WITH CLIPBOARD INLINE BUTTON */}
+                <div className="relative flex items-center">
+                  <Input
+                    placeholder="A8F2K9"
+                    className="uppercase h-14 w-full rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-black text-center text-lg tracking-widest pl-12 pr-14"
+                    required
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handlePasteCode}
+                    className="absolute right-4 p-2 rounded-xl text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-all focus:outline-none"
+                    title="Paste from clipboard"
+                  >
+                    <Clipboard size={18} />
+                  </button>
+                </div>
+
+                <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20 transition-transform active:scale-95">
+                  Join Existing
+                </Button>
               </form>
             </motion.div>
           </motion.div>
