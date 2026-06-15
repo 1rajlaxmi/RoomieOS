@@ -5,6 +5,9 @@ import {
   joinHousehold,
   getMyHousehold,
   leaveHousehold,
+  removeRoommate,
+  transferOwnership, 
+  deleteHousehold
 } from "../controllers/householdController";
 
 const router = express.Router();
@@ -17,5 +20,8 @@ router.post("/create", protect, createHousehold);
 router.post("/join", protect, joinHousehold);
 router.get("/my-household", protect, getMyHousehold);
 router.put("/leave", protect, leaveHousehold);
+router.delete('/evict/:memberId', protect, removeRoommate);
+router.post("/transfer", protect, transferOwnership); 
+router.delete("/", protect, deleteHousehold);
 
 export default router;

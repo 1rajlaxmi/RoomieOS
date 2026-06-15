@@ -1,34 +1,22 @@
-import mongoose, { Document, Schema } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
-// 1. TypeScript Interface
+// 1. UPDATE THE TYPESCRIPT INTERFACE
 export interface IHousehold extends Document {
   name: string;
   inviteCode: string;
-  members: mongoose.Types.ObjectId[]; // This array holds the IDs of the users
+  members: mongoose.Types.ObjectId[];
+  owner: mongoose.Types.ObjectId; // ✅ FIXED: Added owner type declaration here!
 }
 
-// 2. Mongoose Schema
+// 2. THE MONGOOSE SCHEMA
 const HouseholdSchema: Schema = new Schema(
   {
-    name: { 
-      type: String, 
-      required: true,
-      trim: true 
-    },
-    inviteCode: { 
-      type: String, 
-      required: true, 
-      unique: true // Ensures no two apartments ever have the same invite code
-    },
-    members: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "User", // The Magic Link: This tells MongoDB these IDs belong to the User collection
-        required: true
-      },
-    ],
+    name: { type: String, required: true },
+    inviteCode: { type: String, required: true, unique: true },
+    members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    owner: { type: Schema.Types.ObjectId, ref: "User", required: true } // Keeps MongoDB aligned
   },
-  { timestamps: true } // Automatically adds createdAt and updatedAt
+  { timestamps: true }
 );
 
 export default mongoose.model<IHousehold>("Household", HouseholdSchema);
