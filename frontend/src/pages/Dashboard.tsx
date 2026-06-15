@@ -79,7 +79,7 @@ export default function Dashboard() {
 
   const fetchHousehold = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/households/my-household", { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`http://localhost:5000/api/households/my-household`, { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
         setHousehold(data);
@@ -90,14 +90,14 @@ export default function Dashboard() {
 
   const fetchExpenses = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/expenses", { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`http://localhost:5000/api/expenses`, { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) setExpenses(await response.json());
     } catch (err) { console.error(err); }
   };
 
   const fetchChores = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:5000/api/chores", { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`http://localhost:5000/api/chores`, { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) setChores(await response.json());
     } catch (err) { console.error(err); }
   };
@@ -117,7 +117,7 @@ export default function Dashboard() {
     e.preventDefault();
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/expenses", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ description: expenseDesc, amount: Number(expenseAmount) }) });
+      const response = await fetch(`http://localhost:5000/api/expenses`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ description: expenseDesc, amount: Number(expenseAmount) }) });
       if (response.ok) { setExpenseDesc(""); setExpenseAmount(""); fetchExpenses(token!); }
     } catch (err) { console.error(err); }
   };
@@ -141,7 +141,7 @@ export default function Dashboard() {
 
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/chores", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: choreTitle, assignedTo: choreAssignee }) });
+      const response = await fetch(`http://localhost:5000/api/chores`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ title: choreTitle, assignedTo: choreAssignee }) });
       if (response.ok) { setChoreTitle(""); setChoreAssignee(""); setChoreError(""); fetchChores(token!); }
     } catch (err) { console.error(err); }
   };
@@ -150,7 +150,7 @@ export default function Dashboard() {
     setChoreFeedError("");
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/chores/${choreId}/toggle", { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`http://localhost:5000/api/chores/${choreId}/toggle`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         fetchChores(token!);
       } else {
@@ -170,7 +170,7 @@ export default function Dashboard() {
     setIsLeaveModalOpen(false);
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/households/leave", { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`http://localhost:5000/api/households/leave`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) { setHousehold(null); setExpenses([]); setChores([]); }
     } catch (err) { console.error(err); }
   };
@@ -179,9 +179,9 @@ export default function Dashboard() {
     if (!selectedTransferTarget) return;
     const token = localStorage.getItem("token");
     try {
-      const resTransfer = await fetch("http://localhost:5000/api/households/transfer", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ newOwnerId: selectedTransferTarget }) });
+      const resTransfer = await fetch(`http://localhost:5000/api/households/transfer`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ newOwnerId: selectedTransferTarget }) });
       if (resTransfer.ok) {
-        const resLeave = await fetch("http://localhost:5000/api/households/leave", { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
+        const resLeave = await fetch(`http://localhost:5000/api/households/leave`, { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
         if (resLeave.ok) { setShowAdminExitModal(false); setHousehold(null); setExpenses([]); setChores([]); }
       }
     } catch (err) { console.error(err); }
@@ -190,7 +190,7 @@ export default function Dashboard() {
   const executeNuclearDelete = async () => {
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch("http://localhost:5000/api/households", {
+      const response = await fetch(`http://localhost:5000/api/households`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -326,7 +326,7 @@ export default function Dashboard() {
             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
               <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6"><Sparkles size={28} /></div>
               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Create Apartment</h2>
-              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/create", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: createName }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
+              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch(`http://localhost:5000/api/households/create`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: createName }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
                 <Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e) => setCreateName(e.target.value)} className="h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all font-bold px-5" />
                 <Button type="submit" className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/20">Create New Space <ArrowRight className="ml-2" size={20} /></Button>
               </form>
@@ -335,7 +335,7 @@ export default function Dashboard() {
             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
               <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600 mb-6"><Users size={28} /></div>
               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Join via Code</h2>
-              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch("http://localhost:5000/api/households/join", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
+              <form onSubmit={async (e) => { e.preventDefault(); const t = localStorage.getItem("token"); await fetch(`http://localhost:5000/api/households/join`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ inviteCode: joinCode }) }).then(() => fetchHousehold(t!)); }} className="space-y-4">
                 <div className="relative flex items-center">
                   <Input placeholder="A8F2K9" className="uppercase h-14 w-full rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-violet-500 transition-all font-mono font-black text-center text-lg tracking-widest pl-12 pr-14" required value={joinCode} onChange={(e) => setJoinCode(e.target.value)} />
                   <button type="button" onClick={handlePasteCode} className="absolute right-4 p-2 rounded-xl text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-all focus:outline-none" title="Paste from clipboard"><Clipboard size={18} /></button>
