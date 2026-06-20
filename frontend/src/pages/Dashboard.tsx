@@ -61,10 +61,22 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
-    if (!token || !storedUser) { navigate("/login"); return; }
+    if (!token || !storedUser || storedUser === "undefined") { 
+    localStorage.clear();
+    navigate("/login"); 
+    return; 
+  }
+
+  try {
+    // Attempt parsing safely inside an explicit try/catch container
     setUser(JSON.parse(storedUser));
     fetchDashboardData();
-  }, [navigate]);
+  } catch (err) {
+    console.error("Corrupted local storage structure detected. Flushing data...");
+    localStorage.clear();
+    navigate("/login");
+  }
+}, [navigate]);
 
   // COMBINED DATA POLLING UTILITY
   const fetchDashboardData = async () => {

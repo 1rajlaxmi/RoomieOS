@@ -14,21 +14,29 @@ export default function Register() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+ const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
 
-    try {
-      // ✅ CLEAN: Direct call to auth register payload abstraction layer
-      const data = await authService.register({ name, email, password });
-      
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      navigate("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Registration failed. Please try again.");
+  try {
+    const data = await authService.register({ name, email, password });
+    
+    // ✅ FIXES THE LOOP: Safely falls back if payload is flat
+    const token = data.token;
+    const userObj = data.user || data;
+
+    if (!token) {
+      setError("Registration succeeded, but no access token was issued.");
+      return;
     }
-  };
+
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userObj));
+    navigate("/dashboard");
+  } catch (err: any) {
+    setError(err.message || "Registration failed. Please try again.");
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">

@@ -14,21 +14,28 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+  e.preventDefault();
+  setError("");
 
-    try {
-      // ✅ CLEAN: Simple service invocation abstracts network details
-      const data = await authService.login({ email, password });
-      
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      navigate("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Invalid credentials. Please try again.");
+  try {
+    const data = await authService.login({ email, password });
+    
+    // ✅ FIXES THE LOOP: Captures token and handles both flat & nested payloads safely
+    const token = data.token;
+    const userObj = data.user || data; 
+
+    if (!token) {
+      setError("Authentication succeeded, but no security token was returned.");
+      return;
     }
-  };
 
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userObj));
+    navigate("/dashboard");
+  } catch (err: any) {
+    setError(err.message || "Invalid credentials. Please try again.");
+  }
+};
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] p-10 shadow-xl max-w-md w-full border border-slate-100">
