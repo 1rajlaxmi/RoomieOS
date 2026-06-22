@@ -3,6 +3,7 @@ import Expense from "../models/Expense";
 import Household from "../models/Household";
 import { AuthRequest } from "../middleware/authMiddleware";
 import sendEmail from "../utils/sendEmail";
+import { getIO } from "../socket";
 import User from "../models/User"; // We need this to get your roommates' email addresses
 
 // @desc    Add a new expense and split it equally
@@ -44,7 +45,8 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
       household: household._id as any,
       splits
     });
-    // --- NEW: SEND AUTOMATED EMAILS ---
+    
+    // --- SEND AUTOMATED EMAILS ---
     // Fetch all members of the household so we can get their email addresses
     const populatedHousehold = await Household.findById(household._id).populate("members", "name email");
     
@@ -63,7 +65,13 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
         }
       });
     }
+
+    // ✅ FIXED: Using the local 'household' variable fetched at the top of this function
+    if (household) {
+      getIO().to(household._id.toString()).emit("expenses_data_changed");
+    }
     // ----------------------------------
+    
     res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ message: "Server error creating expense", error });
@@ -79,7 +87,7 @@ export const getHouseholdExpenses = async (req: AuthRequest, res: Response): Pro
     const household = await Household.findOne({ members: req.user?._id });
 
     if (!household) {
-      res.status(404).json({ message: "Household not found." });
+     res.status(200).json([]);
       return;
     }
 
@@ -125,6 +133,12 @@ export const settleExpense = async (req: AuthRequest, res: Response): Promise<vo
       // Flip their status to true!
       expense.splits[splitIndex].isPaid = true;
       await expense.save();
+
+      // ✅ FIXED: Using the 'household' field attached directly to the 'expense' document
+      if (expense.household) {
+        getIO().to(expense.household.toString()).emit("expenses_data_changed");
+      }
+
       res.status(200).json(expense);
     } else {
       res.status(404).json({ message: "User not found in this expense." });

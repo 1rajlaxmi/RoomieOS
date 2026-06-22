@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
+import http from "http"; // ✅ Import native HTTP module
+import { initSocket } from "./socket"; // ✅ Import your new socket manager
 
 // Import Routes
 import authRoutes from "./routes/authRoutes";
@@ -18,6 +20,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const server = http.createServer(app)
 
 // Middleware
 app.use(cors());
@@ -28,6 +31,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/households", householdRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/chores", choreRoutes);
+
+// ✅ Initialize the real-time socket cluster layer
+initSocket(server);
 
 // --- TEMPORARY TEST ROUTE ---
 // app.get("/api/test-email", async (req, res) => {
@@ -59,6 +65,6 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Server locked and loaded on http://localhost:${PORT}`);
 });

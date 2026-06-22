@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
+import { io } from "socket.io-client";
 import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
 
 // ✅ NEW: Import your centralized feature service layers
@@ -78,20 +79,69 @@ export default function Dashboard() {
   }
 }, [navigate]);
 
+// ==========================================
+  // ✅ NEW: FLUID REAL-TIME WS STREAM HOOK
+  // ==========================================
+  useEffect(() => {
+    if (!household?._id) return;
+
+    // Connect to your local websocket server thread
+    const socket = io("http://localhost:5000");
+
+    // Immediately signal to the server which isolated apartment room to join
+    socket.emit("join_household_room", household._id);
+
+    // Listen for live database modification triggers from other roommates
+    socket.on("household_data_changed", () => {
+      console.log("⚡ Real-time Event: Roommate array adjusted! Re-fetching data...");
+      fetchDashboardData(); // Re-runs your clean state pulling metrics silently in the background
+    });
+
+    socket.on("chores_data_changed", () => {
+      console.log("⚡ Real-time Event: Chore modified! Re-fetching data...");
+      fetchDashboardData(); // Updates your task donut charts and feeds seamlessly
+    });
+
+    // Listener 3: ✅ NEW! Expense changes
+  socket.on("expenses_data_changed", () => {
+    console.log("⚡ Expense ledger or settlement modified!");
+    fetchDashboardData(); // Instantly re-calculates financial chart metrics & recent activity feeds
+  });
+
+    // Cleanup connection layer cleanly when user navigates away or logs out
+    return () => {
+      socket.disconnect();
+    };
+  }, [household?._id]); // Fires safely only when a user drops into an active room
+
   // COMBINED DATA POLLING UTILITY
+ // ✅ UPGRADED: Self-cleaning, bulletproof data-polling manager
   const fetchDashboardData = async () => {
     try {
       const data = await householdService.getProfile();
-      setHousehold(data);
-      const [fetchedExpenses, fetchedChores] = await Promise.all([
-        expenseService.getAll(),
-        choreService.getAll()
-      ]);
-      setExpenses(fetchedExpenses);
-      setChores(fetchedChores);
+      
+      // ✅ SUCCESS ALLOCATION: If data exists and has a valid ID, load sub-components
+      if (data && data._id) {
+        setHousehold(data);
+        
+        const [fetchedExpenses, fetchedChores] = await Promise.all([
+          expenseService.getAll(),
+          choreService.getAll()
+        ]);
+        setExpenses(fetchedExpenses);
+        setChores(fetchedChores);
+      } else {
+        // ✅ CLEAN TRANSITION: If data is null (meaning no room), clear everything quietly
+        console.log("No active apartment found. Directing to onboarding layout...");
+        setHousehold(null);
+        setExpenses([]);
+        setChores([]);
+      }
     } catch (err: any) {
-      console.error(err);
-      if (err.message.includes("not in a household")) setHousehold(null);
+      console.error("Dashboard synchronization issue:", err);
+      setHousehold(null);
+      setExpenses([]);
+      setChores([]);
     } finally {
       setLoading(false);
     }
@@ -169,14 +219,22 @@ export default function Dashboard() {
     else setIsLeaveModalOpen(true);
   };
 
+ // 2. 🚶 STANDARD LEAVE MANAGER
   const executeStandardLeave = async () => {
     setIsLeaveModalOpen(false);
     try {
       await householdService.leave();
-      setHousehold(null); setExpenses([]); setChores([]);
-    } catch (err: any) { setError(err.message); }
+      
+      setHousehold(null); 
+      setExpenses([]); 
+      setChores([]);
+      
+      // ✅ FIXED: Keep standard exits clean and synchronized as well
+      window.location.reload(); 
+    } catch (err: any) { 
+      setError(err.message || "Failed to leave household."); 
+    }
   };
-
   const executeTransferAndLeave = async () => {
     if (!selectedTransferTarget) return;
     try {
@@ -188,12 +246,26 @@ export default function Dashboard() {
     } catch (err: any) { setError(err.message); }
   };
 
+  // 1. 🛑 NUCLEAR DISSOLVE MANAGER
   const executeNuclearDelete = async () => {
     try {
       await householdService.dissolveRoom();
+      
+      // Close the warning overlay card safely
+      setShowDissolveModal(false); 
+      
+      // Clear out active memory logs
+      setHousehold(null); 
+      setExpenses([]); 
+      setChores([]); 
+      
+      // ✅ FIXED: Force-flush the layout state to instantly draw the "Create Apartment" view
+      window.location.reload();
+    } catch (err: any) { 
+      console.error(err);
+      setError(err.message || "Failed to dissolve room.");
       setShowDissolveModal(false);
-      setHousehold(null); setExpenses([]); setChores([]);
-    } catch (err: any) { setError(err.message); }
+    }
   };
 
   const handleEvictRoommate = async () => {
@@ -366,8 +438,8 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-64 w-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                       <defs>
                         <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" /><stop offset="100%" stopColor="#059669" /></linearGradient>
@@ -397,8 +469,8 @@ export default function Dashboard() {
                   <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Sparkles size={24} /></div>
                   <h2 className="text-2xl font-black tracking-tight">Chore Productivity</h2>
                 </div>
-                <div className="h-64 w-full relative">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-64 w-full relative min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <PieChart>
                       <Pie data={choreChartData} innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none" />
                     </PieChart>

@@ -4,6 +4,7 @@ import Household from "../models/Household";
 import { AuthRequest } from "../middleware/authMiddleware";
 import sendEmail from "../utils/sendEmail";
 import User from "../models/User";
+import { getIO } from "../socket";
 
 // @desc    Add a new chore
 // @route   POST /api/chores
@@ -28,7 +29,7 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
       dueDate: dueDate ? new Date(dueDate) : undefined, // Convert string to proper Date format
     });
 
-    // --- NEW: SEND AUTOMATED EMAILS ---
+    // --- AUTOMATED EMAILS ---
     const assignedUser = await User.findById(assignedTo);
 
     // Only send an email if you assigned it to someone else (not yourself)
@@ -42,7 +43,13 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
         ctaLink: "http://localhost:5173"
       });
     }
+
+    // ✅ FIXED: Using the local 'household' variable we fetched at the top of this function
+    if (household) {
+      getIO().to(household._id.toString()).emit("chores_data_changed");
+    }
     // ----------------------------------
+    
     res.status(201).json(chore);
   } catch (error) {
     res.status(500).json({ message: "Server error creating chore", error });
@@ -57,7 +64,7 @@ export const getHouseholdChores = async (req: AuthRequest, res: Response): Promi
     const household = await Household.findOne({ members: req.user?._id });
 
     if (!household) {
-      res.status(404).json({ message: "Household not found." });
+     res.status(200).json([]);
       return;
     }
 
@@ -87,7 +94,7 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // --- NEW: ACCOUNTABILITY GUARD LAYER ---
+    // --- ACCOUNTABILITY GUARD LAYER ---
     // Safety check to ensure userId exists from the token
     if (!userId) {
       res.status(401).json({ message: "Unauthorized. User ID not found." });
@@ -104,6 +111,11 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
     // Flip the boolean value (if true -> false, if false -> true)
     chore.isCompleted = !chore.isCompleted;
     await chore.save();
+
+    // ✅ FIXED: Using the 'household' ID attached directly to the 'chore' document itself
+    if (chore.household) {
+      getIO().to(chore.household.toString()).emit("chores_data_changed");
+    }
 
     res.status(200).json(chore);
   } catch (error) {

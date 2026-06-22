@@ -1,7 +1,8 @@
 import { Response } from "express";
 import Household from "../models/Household";
-import User from "../models/User"; // ✅ FIXED: Added missing User model import
+import User from "../models/User"; 
 import { AuthRequest } from "../middleware/authMiddleware";
+import { getIO } from "../socket";
 
 // Helper function to generate a random 6-character alphanumeric code
 const generateInviteCode = (): string => {
@@ -21,19 +22,17 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // ✅ CLEANUP: Using your helper function now!
     const inviteCode = generateInviteCode();
 
     const newHousehold = new Household({
       name,
       inviteCode,
       members: [userId],
-      owner: userId // The person who builds the room is dynamically crowned Admin
+      owner: userId 
     });
 
     await newHousehold.save();
     
-    // Bind the household ID back to the user object
     await User.findByIdAndUpdate(userId, { household: newHousehold._id });
 
     res.status(201).json(newHousehold);
@@ -66,13 +65,15 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // ✅ FIXED: Atomic $addToSet avoids validation conflicts on older documents
     await Household.updateOne(
       { _id: household._id },
       { $addToSet: { members: req.user?._id } }
     );
 
     await User.findByIdAndUpdate(req.user?._id, { household: household._id });
+
+    // 📡 Broadcast live addition entry to everyone in the room
+    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json(household);
   } catch (error) {
@@ -89,7 +90,8 @@ export const getMyHousehold = async (req: AuthRequest, res: Response): Promise<v
       .populate("members", "name email"); 
 
     if (!household) {
-      res.status(404).json({ message: "You are not in a household yet." });
+      // ✅ CHANGED: Return 200 OK with null instead of a 404 error
+      res.status(200).json(null);
       return;
     }
 
@@ -118,14 +120,15 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // ✅ FIXED: Atomic $pull modifies only the members array, bypassing schema validation
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: userId } }
     );
 
-    // Unlink the household from the user profile safely
     await User.findByIdAndUpdate(userId, { $unset: { household: "" } });
+
+    // ✅ FIXED: Emit signal so remaining roommates instantly see this user disappear from the list
+    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Successfully left the household." });
   } catch (error) {
@@ -152,9 +155,10 @@ export const deleteHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Unlink all members from this household first
+    // ✅ FIXED: Emit signal to everyone inside the room BEFORE we purge the database collections
+    getIO().to(household._id.toString()).emit("household_data_changed");
+
     await User.updateMany({ _id: { $in: household.members } }, { $unset: { household: "" } });
-    
     await Household.findByIdAndDelete(household._id);
 
     res.status(200).json({ message: "Household completely dissolved successfully." });
@@ -187,19 +191,23 @@ export const removeRoommate = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // ✅ FIXED: Atomic $pull query removes the target member safely
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: memberId } }
     );
 
     await User.findByIdAndUpdate(memberId, { $unset: { household: "" } });
+    
+    // ✅ FIXED: Emit eviction alert to the room channel. 
+    // This forces the evicted user's page and remaining roommates' screens to refresh concurrently.
+    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Roommate successfully evicted." });
   } catch (error) {
     res.status(500).json({ message: "Failed to remove roommate.", error });
   }
 };
+
 // @desc    Transfer admin keys to another roommate (Admin Only)
 // @route   POST /api/households/transfer
 // @access  Private
@@ -219,7 +227,6 @@ export const transferOwnership = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // ✅ FIXED: Uses string comparison via .some() so ObjectId vs String tracking never fails
     const memberExists = household.members.some(m => m.toString() === newOwnerId);
     if (!memberExists) {
       res.status(400).json({ message: "Target user must be an active member of this room." });
@@ -228,6 +235,9 @@ export const transferOwnership = async (req: AuthRequest, res: Response): Promis
 
     household.owner = newOwnerId;
     await household.save();
+
+    // ✅ FIXED: Emit updates so the new admin instantly sees their Admin Options unlock real-time
+    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Admin access passed on cleanly.", household });
   } catch (error) {
