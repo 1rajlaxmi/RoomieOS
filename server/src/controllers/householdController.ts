@@ -3,6 +3,7 @@ import Household from "../models/Household";
 import User from "../models/User"; 
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getIO } from "../socket";
+import sendEmail from "../utils/sendEmail";
 
 // Helper function to generate a random 6-character alphanumeric code
 const generateInviteCode = (): string => {
@@ -34,6 +35,21 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
     await newHousehold.save();
     
     await User.findByIdAndUpdate(userId, { household: newHousehold._id });
+
+    // =========================================================================
+    // ✉️ NEW: ADMIN ROOM CREATION WELCOME EMAIL SYSTEM
+    // =========================================================================
+    if (req.user?.email) {
+      await sendEmail({
+        to: req.user.email,
+        subject: `[RoomieOS] Your Apartment Space is Ready! 🏠`,
+        title: "✨ Welcome to your Admin Console!",
+        body: `Success! You have officially created your new apartment workspace: "${newHousehold.name}" on RoomieOS.\n\nAs the administrator of this space, you hold the management privileges to evict residents, transfer ownership, or dissolve the room if needed. Copy your secure invite code below and send it to your roommates so they can hop in:\n\n🔑 Secure Invite Code: ${newHousehold.inviteCode}`,
+        ctaText: "Launch Dashboard",
+        ctaLink: "http://localhost:5173"
+      });
+    }
+    // =========================================================================
 
     res.status(201).json(newHousehold);
   } catch (error) {
@@ -74,6 +90,47 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
 
     // 📡 Broadcast live addition entry to everyone in the room
     getIO().to(household._id.toString()).emit("household_data_changed");
+
+    // =========================================================================
+    // ✉️ NEW: REAL-TIME WELCOME & ALERTER EMAIL SYSTEM
+    // =========================================================================
+    
+    // A. Send a welcome email to the newcomer
+    if (req.user?.email) {
+      await sendEmail({
+        to: req.user.email,
+        subject: "[RoomieOS] Welcome to your new home space! 🔑",
+        title: "🏠 You're officially checked in!",
+        body: `Great news! Your account has been successfully linked to your new apartment workspace on RoomieOS.\n\nFrom this moment on, you have full shared access to coordinate chore tracking charts, stay on top of daily tasks, split bills equally, and manage household balances cleanly in real-time. Your roommates are waiting for you inside!`,
+        ctaText: "Launch Dashboard",
+        ctaLink: "http://localhost:5173"
+      });
+    }
+
+    // B. Send alert emails to all existing roommates
+    // (Note: 'household.members' holds the list of older roommates from before the update)
+    if (household.members && household.members.length > 0) {
+      const newcomerName = req.user?.name || "A new roommate";
+      
+      for (const memberId of household.members) {
+        // Double-check to ensure we don't accidentally email the newcomer here
+        if (memberId.toString() !== req.user?._id.toString()) {
+          const roommateUser = await User.findById(memberId);
+          
+          if (roommateUser && roommateUser.email) {
+            await sendEmail({
+              to: roommateUser.email,
+              subject: "[RoomieOS] A new roommate has joined your space! ⚡",
+              title: "👥 The circle just got bigger!",
+              body: `Heads up! ${newcomerName} has officially entered your apartment group using your secure invite code.\n\nRoomieOS has automatically adjusted your backend infrastructure parameters. All new financial splits and task delegations will now calculate and accommodate your new group size automatically.`,
+              ctaText: "Open RoomieOS",
+              ctaLink: "http://localhost:5173"
+            });
+          }
+        }
+      }
+    }
+    // ========================================================================= 
 
     res.status(200).json(household);
   } catch (error) {
