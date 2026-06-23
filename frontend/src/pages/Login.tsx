@@ -144,7 +144,8 @@ export default function Login() {
               type="submit" 
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white font-bold text-lg shadow-lg shadow-indigo-600/20 hover:shadow-xl hover:shadow-indigo-600/30 transition-all duration-150"
+              className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 text-white font-bold text-lg shadow-lg
+               shadow-indigo-600/20 hover:shadow-xl hover:shadow-indigo-600/30 transition-all duration-150 cursor-pointer"
             >
               Sign In Securely
             </MotionButton>

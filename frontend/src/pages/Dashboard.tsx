@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
 
 // ✅ NEW: Import your centralized feature service layers
@@ -54,6 +55,8 @@ export default function Dashboard() {
   const [showDissolveModal, setShowDissolveModal] = useState(false);
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
 
+  const [isCreatingTask, setIsCreatingTask] = useState(false); // ✅ TARGETED LOADING STATE
+
   const isAdmin = useMemo(() => {
     if (!household || !user) return false;
     return household.owner === user._id;
@@ -62,24 +65,24 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
-    if (!token || !storedUser || storedUser === "undefined") { 
-    localStorage.clear();
-    navigate("/login"); 
-    return; 
-  }
+    if (!token || !storedUser || storedUser === "undefined") {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
 
-  try {
-    // Attempt parsing safely inside an explicit try/catch container
-    setUser(JSON.parse(storedUser));
-    fetchDashboardData();
-  } catch (err) {
-    console.error("Corrupted local storage structure detected. Flushing data...");
-    localStorage.clear();
-    navigate("/login");
-  }
-}, [navigate]);
+    try {
+      // Attempt parsing safely inside an explicit try/catch container
+      setUser(JSON.parse(storedUser));
+      fetchDashboardData();
+    } catch (err) {
+      console.error("Corrupted local storage structure detected. Flushing data...");
+      localStorage.clear();
+      navigate("/login");
+    }
+  }, [navigate]);
 
-// ==========================================
+  // ==========================================
   // ✅ NEW: FLUID REAL-TIME WS STREAM HOOK
   // ==========================================
   useEffect(() => {
@@ -97,16 +100,16 @@ export default function Dashboard() {
       fetchDashboardData(); // Re-runs your clean state pulling metrics silently in the background
     });
 
-    socket.on("chores_data_changed", () => {
-      console.log("⚡ Real-time Event: Chore modified! Re-fetching data...");
-      fetchDashboardData(); // Updates your task donut charts and feeds seamlessly
+    socket.on("chores_data_changed", async () => {
+      console.log("⚡ Chore modified remotely!");
+      await fetchDashboardData(); // Refetches quietly in the background without flickering the UI
     });
 
     // Listener 3: ✅ NEW! Expense changes
-  socket.on("expenses_data_changed", () => {
-    console.log("⚡ Expense ledger or settlement modified!");
-    fetchDashboardData(); // Instantly re-calculates financial chart metrics & recent activity feeds
-  });
+    socket.on("expenses_data_changed", () => {
+      console.log("⚡ Expense ledger or settlement modified!");
+      fetchDashboardData(); // Instantly re-calculates financial chart metrics & recent activity feeds
+    });
 
     // Cleanup connection layer cleanly when user navigates away or logs out
     return () => {
@@ -115,15 +118,15 @@ export default function Dashboard() {
   }, [household?._id]); // Fires safely only when a user drops into an active room
 
   // COMBINED DATA POLLING UTILITY
- // ✅ UPGRADED: Self-cleaning, bulletproof data-polling manager
+  // ✅ UPGRADED: Self-cleaning, bulletproof data-polling manager
   const fetchDashboardData = async () => {
     try {
       const data = await householdService.getProfile();
-      
+
       // ✅ SUCCESS ALLOCATION: If data exists and has a valid ID, load sub-components
       if (data && data._id) {
         setHousehold(data);
-        
+
         const [fetchedExpenses, fetchedChores] = await Promise.all([
           expenseService.getAll(),
           choreService.getAll()
@@ -196,11 +199,16 @@ export default function Dashboard() {
     if (!choreAssignee) { setChoreError("Please choose a roommate to delegate this task to."); return; }
 
     try {
+      setIsCreatingTask(true); // 🚀 Show ONLY the single top skeleton row
       await choreService.create(choreTitle, choreAssignee);
       setChoreTitle(""); setChoreAssignee("");
       const updated = await choreService.getAll();
       setChores(updated);
-    } catch (err: any) { setChoreError(err.message); }
+    } catch (err: any) {
+      setChoreError(err.message);
+    } finally {
+      setIsCreatingTask(false); // 🏁 Hide the top skeleton
+    }
   };
 
   const handleToggleChore = async (choreId: string) => {
@@ -219,20 +227,20 @@ export default function Dashboard() {
     else setIsLeaveModalOpen(true);
   };
 
- // 2. 🚶 STANDARD LEAVE MANAGER
+  // 2. 🚶 STANDARD LEAVE MANAGER
   const executeStandardLeave = async () => {
     setIsLeaveModalOpen(false);
     try {
       await householdService.leave();
-      
-      setHousehold(null); 
-      setExpenses([]); 
+
+      setHousehold(null);
+      setExpenses([]);
       setChores([]);
-      
+
       // ✅ FIXED: Keep standard exits clean and synchronized as well
-      window.location.reload(); 
-    } catch (err: any) { 
-      setError(err.message || "Failed to leave household."); 
+      window.location.reload();
+    } catch (err: any) {
+      setError(err.message || "Failed to leave household.");
     }
   };
   const executeTransferAndLeave = async () => {
@@ -250,18 +258,18 @@ export default function Dashboard() {
   const executeNuclearDelete = async () => {
     try {
       await householdService.dissolveRoom();
-      
+
       // Close the warning overlay card safely
-      setShowDissolveModal(false); 
-      
+      setShowDissolveModal(false);
+
       // Clear out active memory logs
-      setHousehold(null); 
-      setExpenses([]); 
-      setChores([]); 
-      
+      setHousehold(null);
+      setExpenses([]);
+      setChores([]);
+
       // ✅ FIXED: Force-flush the layout state to instantly draw the "Create Apartment" view
       window.location.reload();
-    } catch (err: any) { 
+    } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to dissolve room.");
       setShowDissolveModal(false);
@@ -281,40 +289,40 @@ export default function Dashboard() {
 
   // DATA CHART COMPILING LABELS
   const expenseChartData = useMemo(() => {
-  if (!household || !expenses) return [];
-  return household.members.map((member: any) => {
-    let actualPaid = 0;
-    expenses.forEach((exp: any) => {
-      if (exp.paidBy?._id === member._id) {
-        actualPaid += exp.amount;
-        exp.splits?.forEach((s: any) => { if (s.user?._id !== member._id && s.isPaid) actualPaid -= s.amountOwed; });
-      } else {
-        exp.splits?.forEach((s: any) => { if (s.user?._id === member._id && s.isPaid) actualPaid += s.amountOwed; });
-      }
+    if (!household || !expenses) return [];
+    return household.members.map((member: any) => {
+      let actualPaid = 0;
+      expenses.forEach((exp: any) => {
+        if (exp.paidBy?._id === member._id) {
+          actualPaid += exp.amount;
+          exp.splits?.forEach((s: any) => { if (s.user?._id !== member._id && s.isPaid) actualPaid -= s.amountOwed; });
+        } else {
+          exp.splits?.forEach((s: any) => { if (s.user?._id === member._id && s.isPaid) actualPaid += s.amountOwed; });
+        }
+      });
+
+      const netPaid = Number(actualPaid.toFixed(2));
+
+      return {
+        name: member.name === user?.name ? "You" : member.name,
+        "Net Paid": netPaid,
+        // ✅ NEW: Inject the gradient assignment directly into the item object
+        fill: netPaid >= 0 ? "url(#posGradient)" : "url(#negGradient)"
+      };
     });
-    
-    const netPaid = Number(actualPaid.toFixed(2));
-    
-    return { 
-      name: member.name === user?.name ? "You" : member.name, 
-      "Net Paid": netPaid,
-      // ✅ NEW: Inject the gradient assignment directly into the item object
-      fill: netPaid >= 0 ? "url(#posGradient)" : "url(#negGradient)"
-    };
-  });
-}, [household, expenses, user]);
+  }, [household, expenses, user]);
 
   const choreChartData = useMemo(() => {
-  const completed = chores.filter(c => c.isCompleted).length;
-  const pending = chores.length - completed;
-  
-  // ✅ NEW: Changed the 'color' properties to native 'fill' properties
-  if (chores.length === 0) return [{ name: "No Chores", value: 1, fill: "#e2e8f0" }];
-  return [
-    { name: "Completed", value: completed, fill: "#10b981" },
-    { name: "Pending", value: pending, fill: "#6366f1" }
-  ];
-}, [chores]);
+    const completed = chores.filter(c => c.isCompleted).length;
+    const pending = chores.length - completed;
+
+    // ✅ NEW: Changed the 'color' properties to native 'fill' properties
+    if (chores.length === 0) return [{ name: "No Chores", value: 1, fill: "#e2e8f0" }];
+    return [
+      { name: "Completed", value: completed, fill: "#10b981" },
+      { name: "Pending", value: pending, fill: "#6366f1" }
+    ];
+  }, [chores]);
 
   if (loading || !user) return <div className="min-h-screen flex items-center justify-center font-bold text-indigo-500">Loading OS...</div>;
 
@@ -357,12 +365,12 @@ export default function Dashboard() {
           /* ONBOARDING LAYOUT SCREEN */
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6"><Sparkles size={28} /></div>
+              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6 "><Sparkles size={28} /></div>
               <h2 className="text-2xl font-black tracking-tight text-slate-900 mb-6">Create Apartment</h2>
               <form onSubmit={handleCreateSpace} className="space-y-4">
                 <Input placeholder="e.g. The Sunny Loft" required value={createName} onChange={(e) => setCreateName(e.target.value)} className="h-14 rounded-2xl bg-white/50 border-white focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold px-5" />
                 <Button type="submit"
-                  className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl">
+                  className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl cursor-pointer">
                   Create New Space <ArrowRight className="ml-2" size={20} /></Button>
               </form>
             </motion.div>
@@ -376,7 +384,7 @@ export default function Dashboard() {
                   <button type="button" onClick={handlePasteCode} className="absolute right-4 p-2 rounded-xl text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-all" title="Paste"><Clipboard size={18} /></button>
                 </div>
                 <Button type="submit"
-                  className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl">
+                  className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-lg shadow-xl cursor-pointer">
                   Join Existing
                 </Button>
               </form>
@@ -407,7 +415,7 @@ export default function Dashboard() {
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={handleExitClick}
-                    className={`h-13 px-6 font-black rounded-2xl transition-all flex items-center gap-2.5 text-sm select-none border shadow-xl
+                    className={`h-13 px-6 font-black rounded-2xl transition-all flex items-center gap-2.5 text-sm select-none border shadow-xl cursor-pointer
           ${isAdmin
                         ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-400 shadow-amber-500/20"
                         : "bg-white hover:bg-slate-100 text-slate-900 border-slate-200"
@@ -458,7 +466,7 @@ export default function Dashboard() {
                           );
                         } return null;
                       }} />
-                     <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]} />
+                      <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -492,7 +500,7 @@ export default function Dashboard() {
                     <Input placeholder="Groceries, Rent..." required value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5" />
                     <Input type="number" step="0.01" min="0.01" placeholder="₹0.00" required value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5" />
                     <button type="submit"
-                      className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg"><Plus size={20} className="mr-2" />
+                      className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer"><Plus size={20} className="mr-2" />
                       Split Bill
                     </button>
                   </form>
@@ -529,7 +537,8 @@ export default function Dashboard() {
                         )}
                       </AnimatePresence>
                     </div>
-                    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg"><CheckCircle2 size={20} className="mr-2" /> Delegate</button>
+                    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer">
+                      <CheckCircle2 size={20} className="mr-2" /> Delegate</button>
                   </form>
                   <AnimatePresence>
                     {choreError && (
@@ -551,7 +560,7 @@ export default function Dashboard() {
                             <span className="text-sm font-bold text-slate-700">{m.name} {m._id === user._id && "(You)"}</span>
                           </div>
                           {m._id !== user._id && (
-                            <button onClick={() => setRoommateToEvict(m)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={14} /></button>
+                            <button onClick={() => setRoommateToEvict(m)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"><Trash2 size={14} /></button>
                           )}
                         </div>
                       ))}
@@ -605,21 +614,67 @@ export default function Dashboard() {
                     )}
                   </AnimatePresence>
                   <AnimatePresence>
-                    {chores.map((chore: any) => (
-                      <motion.div key={chore._id} layout whileHover={hoverCard} className={glassCardClass + ` !p-5 flex items-center gap-5 ${chore.isCompleted ? "opacity-50" : ""}`}>
-                        <button onClick={() => handleToggleChore(chore._id)} className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center ${chore.isCompleted ? "bg-emerald-500 border-emerald-500" : "border-slate-300 bg-slate-50"}`}>
-                          {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
-                        </button>
-                        <div>
-                          <p className={`text-xl font-black ${chore.isCompleted ? "line-through text-slate-400" : ""}`}>{chore.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo?.name}`} className="w-5 h-5 rounded-full bg-emerald-100" alt="avatar" />
-                            <p className="text-sm font-bold text-slate-500">For {chore.assignedTo?.name === user.name ? "You" : chore.assignedTo?.name}</p>
-                          </div>
-                        </div>
+                    {choreFeedError && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl text-center">
+                        ⚠️ {choreFeedError}
                       </motion.div>
-                    ))}
+                    )}
                   </AnimatePresence>
+
+                  <div className="space-y-4">
+                    <AnimatePresence mode="popLayout">
+
+                      {/* ✅ 1. SINGLE TOP SKELETON ROW: Slides in only when creating a task */}
+                      {isCreatingTask && (
+                        <motion.div
+                          key="single-task-skeleton"
+                          initial={{ opacity: 0, height: 0, y: -20, scale: 0.95 }}
+                          animate={{ opacity: 1, height: "auto", y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                          className={glassCardClass + " !p-5 flex items-center gap-5 border-dashed border-indigo-300 bg-indigo-50/10"}
+                        >
+                          <Skeleton className="h-12 w-12 rounded-2xl bg-indigo-200/50 animate-pulse flex-shrink-0" />
+                          <div className="space-y-2.5 flex-1">
+                            <Skeleton className="h-5 w-1/2 bg-slate-200/80 animate-pulse rounded-lg" />
+                            <Skeleton className="h-4 w-1/4 bg-slate-100 animate-pulse rounded-md" />
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* 2. THE MAIN TASK LIST: Stays fully visible and uninterrupted */}
+                      {chores.length === 0 && !isCreatingTask ? (
+                        <div className="text-center py-8 text-slate-400 font-bold text-sm">No pending tasks for your room! 🎉</div>
+                      ) : (
+                        chores.map((chore: any) => (
+                          <motion.div
+                            key={chore._id}
+                            layout
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            whileHover={hoverCard}
+                            className={glassCardClass + ` !p-5 flex items-center gap-5 ${chore.isCompleted ? "opacity-50" : ""}`}
+                          >
+                            <button
+                              onClick={() => handleToggleChore(chore._id)}
+                              className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200
+                ${chore.isCompleted ? "bg-emerald-500 border-emerald-500 scale-100" : "border-slate-300 bg-slate-50 hover:border-emerald-400"}`}
+                            >
+                              {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
+                            </button>
+                            <div>
+                              <p className={`text-xl font-black transition-all ${chore.isCompleted ? "line-through text-slate-400" : ""}`}>{chore.title}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo?.name}`} className="w-5 h-5 rounded-full bg-emerald-100" alt="avatar" />
+                                <p className="text-sm font-bold text-slate-500">For {chore.assignedTo?.name === user.name ? "You" : chore.assignedTo?.name}</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </motion.div>
               </div>
             </div>
@@ -637,8 +692,8 @@ export default function Dashboard() {
               <h3 className="text-2xl font-black mb-2">Leave Apartment?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8">Are you sure you want to exit? Your dashboard access will close instantly.</p>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setIsLeaveModalOpen(false)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold">Nevermind</button>
-                <button onClick={executeStandardLeave} className="h-14 rounded-2xl bg-rose-600 text-white font-bold">Yes, Leave</button>
+                <button onClick={() => setIsLeaveModalOpen(false)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Nevermind</button>
+                <button onClick={executeStandardLeave} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Leave</button>
               </div>
             </motion.div>
           </div>
@@ -657,8 +712,8 @@ export default function Dashboard() {
               <h3 className="text-2xl font-black mb-2">Remove Resident?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed">Are you absolutely certain you want to remove <span className="text-rose-600 font-black">{roommateToEvict.name}</span> from this apartment group?</p>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setRoommateToEvict(null)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold">Cancel</button>
-                <button onClick={handleEvictRoommate} className="h-14 rounded-2xl bg-rose-600 text-white font-bold">Yes, Remove</button>
+                <button onClick={() => setRoommateToEvict(null)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel</button>
+                <button onClick={handleEvictRoommate} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Remove</button>
               </div>
             </motion.div>
           </div>
@@ -702,14 +757,16 @@ export default function Dashboard() {
                       )}
                     </AnimatePresence>
                   </div>
-                  <button disabled={!selectedTransferTarget} onClick={executeTransferAndLeave} className="w-full h-11 bg-slate-900 text-white text-sm font-bold rounded-xl disabled:bg-slate-200">Assign & Resign</button>
+                  <button disabled={!selectedTransferTarget} onClick={executeTransferAndLeave} className="w-full h-11 bg-slate-900 text-white text-sm font-bold rounded-xl
+                   disabled:bg-slate-200 cursor-pointer">Assign & Resign</button>
                 </div>
                 <div className="relative flex py-2 items-center text-slate-300">
                   <div className="flex-grow border-t"></div> <span className="mx-4 text-xs font-black uppercase text-slate-400">Or</span> <div className="flex-grow border-t"></div>
                 </div>
                 <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
                   <label className="block text-xs font-black uppercase text-rose-500 mb-1">Option B: Dissolve Room</label>
-                  <button onClick={() => { setShowAdminExitModal(false); setShowDissolveModal(true); }} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-rose-600/10">Delete Room for Everyone</button>
+                  <button onClick={() => { setShowAdminExitModal(false); setShowDissolveModal(true); }} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl 
+                  shadow-lg shadow-rose-600/10 cursor-pointer">Delete Room for Everyone</button>
                 </div>
               </div>
             </motion.div>
@@ -727,8 +784,8 @@ export default function Dashboard() {
               <h3 className="text-3xl font-black tracking-tighter mb-3">Dissolve Apartment?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed">This action is permanent. All chore tracking charts, balance splits, and historical data logs will be completely wiped from the cloud infrastructure.</p>
               <div className="space-y-3">
-                <button onClick={executeNuclearDelete} className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-lg shadow-lg">Yes, Dissolve Space</button>
-                <button onClick={() => setShowDissolveModal(false)} className="w-full h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold">Cancel, Keep Active</button>
+                <button onClick={executeNuclearDelete} className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-lg shadow-lg cursor-pointer">Yes, Dissolve Space</button>
+                <button onClick={() => setShowDissolveModal(false)} className="w-full h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel, Keep Active</button>
               </div>
             </motion.div>
           </div>
