@@ -55,7 +55,7 @@ initSocket(server);
 // ----------------------------
 
 // Your normal routes are down here...
-app.use("/api/auth", authRoutes);
+//app.use("/api/auth", authRoutes);
 // ...
 
 // Basic test route

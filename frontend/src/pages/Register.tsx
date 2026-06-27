@@ -27,7 +27,7 @@ const AuthBackground = () => (
 );
 
 // Bind motion attributes directly to the UI Button component safely
-const MotionButton = motion(Button);
+const MotionButton = motion.create(Button); 
 
 // Animation configurations with explicit type structures
 const containerVariants: Variants = {

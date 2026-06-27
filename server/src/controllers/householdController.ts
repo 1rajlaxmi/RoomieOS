@@ -1,5 +1,7 @@
 import { Response } from "express";
 import Household from "../models/Household";
+import Chore from "../models/Chore";
+import Expense from "../models/Expense";
 import User from "../models/User"; 
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getIO } from "../socket";
@@ -23,6 +25,15 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    // 🛡️ SECURITY GUARD: Check if the user is already linked to any household
+    const existingHousehold = await Household.findOne({ members: userId });
+    if (existingHousehold) {
+      res.status(400).json({ 
+        message: `You are already a member of "${existingHousehold.name}". You must leave your current room before creating a new one.` 
+      });
+      return;
+    }
+
     const inviteCode = generateInviteCode();
 
     const newHousehold = new Household({
@@ -34,22 +45,20 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
 
     await newHousehold.save();
     
+    // Bind the household ID back to the user object
     await User.findByIdAndUpdate(userId, { household: newHousehold._id });
 
-    // =========================================================================
-    // ✉️ NEW: ADMIN ROOM CREATION WELCOME EMAIL SYSTEM
-    // =========================================================================
+    // --- ADMIN ROOM CREATION WELCOME EMAIL SYSTEM ---
     if (req.user?.email) {
       await sendEmail({
         to: req.user.email,
         subject: `[RoomieOS] Your Apartment Space is Ready! 🏠`,
         title: "✨ Welcome to your Admin Console!",
-        body: `Success! You have officially created your new apartment workspace: "${newHousehold.name}" on RoomieOS.\n\nAs the administrator of this space, you hold the management privileges to evict residents, transfer ownership, or dissolve the room if needed. Copy your secure invite code below and send it to your roommates so they can hop in:\n\n🔑 Secure Invite Code: ${newHousehold.inviteCode}`,
+        body: `Success! You have officially created your new apartment workspace: "${newHousehold.name}" on RoomieOS.\n\n🔑 Secure Invite Code: ${newHousehold.inviteCode}`,
         ctaText: "Launch Dashboard",
         ctaLink: "http://localhost:5173"
       });
     }
-    // =========================================================================
 
     res.status(201).json(newHousehold);
   } catch (error) {
@@ -63,9 +72,19 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
 export const joinHousehold = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { inviteCode } = req.body;
+    const userId = req.user?._id;
 
     if (!inviteCode) {
       res.status(400).json({ message: "Invite code is required." });
+      return;
+    }
+
+    // 🛡️ SECURITY GUARD: Block entry if this roommate is already nested inside an active room
+    const currentHousehold = await Household.findOne({ members: userId });
+    if (currentHousehold) {
+      res.status(400).json({ 
+        message: `You are already registered in "${currentHousehold.name}". Please exit your active apartment workspace before joining a new one.` 
+      });
       return;
     }
 
@@ -76,53 +95,41 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    if (household.members.includes(req.user?._id as any)) {
-      res.status(400).json({ message: "You are already a member of this household!" });
-      return;
-    }
-
+    // Update the household members list in the database
     await Household.updateOne(
       { _id: household._id },
-      { $addToSet: { members: req.user?._id } }
+      { $addToSet: { members: userId } }
     );
 
-    await User.findByIdAndUpdate(req.user?._id, { household: household._id });
+    // Link the household to the newcomer's profile
+    await User.findByIdAndUpdate(userId, { household: household._id });
 
-    // 📡 Broadcast live addition entry to everyone in the room
+    // Trigger live UI updates across active browsers
     getIO().to(household._id.toString()).emit("household_data_changed");
 
-    // =========================================================================
-    // ✉️ NEW: REAL-TIME WELCOME & ALERTER EMAIL SYSTEM
-    // =========================================================================
-    
-    // A. Send a welcome email to the newcomer
+    // --- REAL-TIME WELCOME & ALERTER EMAIL SYSTEM ---
     if (req.user?.email) {
       await sendEmail({
         to: req.user.email,
         subject: "[RoomieOS] Welcome to your new home space! 🔑",
         title: "🏠 You're officially checked in!",
-        body: `Great news! Your account has been successfully linked to your new apartment workspace on RoomieOS.\n\nFrom this moment on, you have full shared access to coordinate chore tracking charts, stay on top of daily tasks, split bills equally, and manage household balances cleanly in real-time. Your roommates are waiting for you inside!`,
+        body: `Great news! Your account has been successfully linked to your new apartment workspace on RoomieOS.`,
         ctaText: "Launch Dashboard",
         ctaLink: "http://localhost:5173"
       });
     }
 
-    // B. Send alert emails to all existing roommates
-    // (Note: 'household.members' holds the list of older roommates from before the update)
     if (household.members && household.members.length > 0) {
       const newcomerName = req.user?.name || "A new roommate";
-      
       for (const memberId of household.members) {
-        // Double-check to ensure we don't accidentally email the newcomer here
-        if (memberId.toString() !== req.user?._id.toString()) {
+        if (memberId.toString() !== userId?.toString()) {
           const roommateUser = await User.findById(memberId);
-          
           if (roommateUser && roommateUser.email) {
             await sendEmail({
               to: roommateUser.email,
               subject: "[RoomieOS] A new roommate has joined your space! ⚡",
               title: "👥 The circle just got bigger!",
-              body: `Heads up! ${newcomerName} has officially entered your apartment group using your secure invite code.\n\nRoomieOS has automatically adjusted your backend infrastructure parameters. All new financial splits and task delegations will now calculate and accommodate your new group size automatically.`,
+              body: `Heads up! ${newcomerName} has officially entered your apartment group using your secure invite code.`,
               ctaText: "Open RoomieOS",
               ctaLink: "http://localhost:5173"
             });
@@ -130,7 +137,6 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
         }
       }
     }
-    // ========================================================================= 
 
     res.status(200).json(household);
   } catch (error) {
@@ -177,14 +183,49 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // 🛡️ ACCOUNTABILITY GUARD 1: Check for incomplete chores assigned to this user
+    const pendingChores = await Chore.countDocuments({
+      household: household._id,
+      assignedTo: userId,
+      isCompleted: false
+    });
+
+    if (pendingChores > 0) {
+      res.status(400).json({
+        message: `Exit Blocked! You still have ${pendingChores} pending task(s) assigned to you. Please complete or reassign your chores before leaving.`
+      });
+      return;
+    }
+
+    // 🛡️ ACCOUNTABILITY GUARD 2: Check for unpaid bill splits linked to this user
+    // We look for expenses in this house where the user is listed in a split and 'isPaid' is false
+    const unpaidExpenses = await Expense.countDocuments({
+      household: household._id,
+      splits: {
+        $elemMatch: {
+          user: userId,
+          isPaid: false
+        }
+      }
+    });
+
+    if (unpaidExpenses > 0) {
+      res.status(400).json({
+        message: `Exit Blocked! You have ${unpaidExpenses} outstanding bill split(s) that are unpaid. Please settle your debts with your roommates before leaving.`
+      });
+      return;
+    }
+
+    // ✅ CLEAN TO EXIT: If the code reaches here, the user owes nothing and has completed all tasks
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: userId } }
     );
 
+    // Unlink the household from the user profile safely
     await User.findByIdAndUpdate(userId, { $unset: { household: "" } });
 
-    // ✅ FIXED: Emit signal so remaining roommates instantly see this user disappear from the list
+    // Emit signal so remaining roommates instantly see the user list update live
     getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Successfully left the household." });

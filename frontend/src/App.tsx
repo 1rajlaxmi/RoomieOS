@@ -1,22 +1,24 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
-       {/* Make the Dashboard the default home page */}
-        <Route path="/" element={<Dashboard />} />
-        
-        {/* Auth Routes */}
-        {/* Your official routes */}
-        <Route path="/dashboard" element={<Dashboard />} />
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        {/* 🛡️ Protected Route Group */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          {/* Any other private sub-pages you add later go right here! */}
+        </Route>
       </Routes>
-    </Router>
+    </BrowserRouter>
   );
 }
 
