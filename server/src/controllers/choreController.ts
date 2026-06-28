@@ -49,8 +49,14 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
       getIO().to(household._id.toString()).emit("chores_data_changed");
     }
     // ----------------------------------
-    
-    res.status(201).json(chore);
+    const updatedChoresList = await Chore.find({ household: household._id })
+      .populate("assignedTo", "name") // Must match your getHouseholdChores layout completely
+      .sort({ isCompleted: 1, createdAt: -1 }); // Keep unfinished chores floating at the top
+
+    // Send the complete array right back to the frontend in a single round-trip
+    res.status(201).json(updatedChoresList);
+
+
   } catch (error) {
     res.status(500).json({ message: "Server error creating chore", error });
   }

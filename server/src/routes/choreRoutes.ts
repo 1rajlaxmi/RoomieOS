@@ -1,4 +1,4 @@
-import express from "express";
+import { Router } from "express";
 import { protect } from "../middleware/authMiddleware";
 import {
   addChore,
@@ -6,11 +6,14 @@ import {
   toggleChoreStatus,
 } from "../controllers/choreController";
 
-const router = express.Router();
+const router = Router();
 
 // All chore routes are protected so only logged-in roommates can see or edit them.
-router.post("/", protect, addChore);
-router.get("/", protect, getHouseholdChores);
-router.put("/:choreId/toggle", protect, toggleChoreStatus);
+router.route("/")
+  .post(protect, addChore)
+  .get(protect, getHouseholdChores);
+
+router.route("/:choreId/toggle")
+  .put(protect, toggleChoreStatus);
 
 export default router;

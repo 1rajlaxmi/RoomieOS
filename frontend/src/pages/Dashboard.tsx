@@ -65,7 +65,7 @@ export default function Dashboard() {
   useEffect(() => {
     // Since ProtectedRoute guarantees the user is valid, we can safely grab and parse data instantly!
     const storedUser = localStorage.getItem("user")!;
-    
+
     try {
       setUser(JSON.parse(storedUser));
       fetchDashboardData();
@@ -145,7 +145,7 @@ export default function Dashboard() {
     try {
       await householdService.create(createName);
       setCreateName("");
-      window.location.reload(); 
+      window.location.reload();
     } catch (err: any) { setError(err.message); }
   };
 
@@ -154,7 +154,7 @@ export default function Dashboard() {
     try {
       await householdService.join(joinCode);
       setJoinCode("");
-      window.location.reload(); 
+      window.location.reload();
     } catch (err: any) { setError(err.message); }
   };
 
@@ -183,10 +183,16 @@ export default function Dashboard() {
 
     try {
       setIsCreatingTask(true);
-      await choreService.create(choreTitle, choreAssignee);
-      setChoreTitle(""); setChoreAssignee("");
-      const updated = await choreService.getAll();
-      setChores(updated);
+
+      // ✅ OPTIMIZED: The backend should return the updated chores list directly!
+      const updatedList = await choreService.create(choreTitle, choreAssignee);
+
+      // Update state instantly with the fresh array in one step
+      setChores(updatedList);
+
+      // Clear your input fields
+      setChoreTitle("");
+      setChoreAssignee("");
     } catch (err: any) {
       setChoreError(err.message);
     } finally {
@@ -382,9 +388,8 @@ export default function Dashboard() {
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={handleExitClick}
-                    className={`h-13 px-6 font-black rounded-2xl transition-all flex items-center gap-2.5 text-sm select-none border shadow-xl cursor-pointer ${
-                      isAdmin ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-400 shadow-amber-500/20" : "bg-white hover:bg-slate-100 text-slate-900 border-slate-200"
-                    }`}
+                    className={`h-13 px-6 font-black rounded-2xl transition-all flex items-center gap-2.5 text-sm select-none border shadow-xl cursor-pointer ${isAdmin ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-400 shadow-amber-500/20" : "bg-white hover:bg-slate-100 text-slate-900 border-slate-200"
+                      }`}
                   >
                     <LogOut size={16} strokeWidth={2.5} />
                     {isAdmin ? "Room Management" : "Leave Apartment"}
@@ -574,7 +579,7 @@ export default function Dashboard() {
                 {/* --- PENDING TASKS COLOUR BLOCK LAYER --- */}
                 <motion.div variants={slideUp} className="space-y-4">
                   <h2 className="text-2xl font-black flex items-center gap-2"><Trash2 className="text-emerald-500" /> Pending Tasks</h2>
-                  
+
                   <AnimatePresence>
                     {choreFeedError && (
                       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1, x: [0, -10, 10, -10, 10, 0] }} exit={{ opacity: 0 }} className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl text-center">
@@ -617,9 +622,8 @@ export default function Dashboard() {
                           >
                             <button
                               onClick={() => handleToggleChore(chore._id)}
-                              className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
-                                chore.isCompleted ? "bg-emerald-500 border-emerald-500 scale-100" : "border-slate-300 bg-slate-50 hover:border-emerald-400"
-                              }`}
+                              className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${chore.isCompleted ? "bg-emerald-500 border-emerald-500 scale-100" : "border-slate-300 bg-slate-50 hover:border-emerald-400"
+                                }`}
                             >
                               {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
                             </button>

@@ -39,4 +39,9 @@ const ChoreSchema: Schema = new Schema(
   { timestamps: true }
 );
 
+// 🚀 ADD THESE HIGH-PERFORMANCE INDEXES RIGHT HERE:
+ChoreSchema.index({ household: 1 });
+ChoreSchema.index({ assignedTo: 1 });
+ChoreSchema.index({ household: 1, isCompleted: 1 }); // Optimizes the "Pending Tasks" dashboard panel specifically!
+
 export default mongoose.model<IChore>("Chore", ChoreSchema);
