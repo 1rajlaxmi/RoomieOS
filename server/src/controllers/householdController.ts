@@ -6,11 +6,20 @@ import User from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getIO } from "../socket";
 import sendEmail from "../utils/sendEmail";
+import crypto from "crypto";
 
 // Helper function to generate a random 6-character alphanumeric code
 const generateInviteCode = (): string => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // 1. Generate 3 random secure bytes (e.g., [164, 42, 211])
+  const bytes = crypto.randomBytes(3);
+  
+  // 2. Convert those bytes into a clean, 6-character hex string (e.g., "a422d3")
+  const hexCode = bytes.toString("hex");
+  
+  // 3. Return it in uppercase for easy user reading/typing ("A422D3")
+  return hexCode.toUpperCase();
 };
+
 
 // @desc    Create a new household
 // @route   POST /api/households/create

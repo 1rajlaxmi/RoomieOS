@@ -1,35 +1,24 @@
-import { Server } from "socket.io";
 import http from "http";
+import { Server } from "socket.io";
 
 let io: Server;
 
 export const initSocket = (server: http.Server) => {
   io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173", // Your frontend local URL
-      methods: ["GET", "POST", "PUT", "DELETE"]
+      // ✅ FIXED: Pulls from .env dynamically, with a safe local development fallback
+      origin: process.env.FRONTEND_URL || "http://localhost:5173", 
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      credentials: true // Good practice to include if you manage HTTP cookies or session states
     }
-  });
-
-  io.on("connection", (socket) => {
-    console.log("🔌 Real-time user connected:", socket.id);
-
-    // 🏠 Secure Room Isolation: Users join a room mapped to their household ID
-    socket.on("join_household_room", (householdId: string) => {
-      socket.join(householdId);
-      console.log(`🚪 User joined private household room: ${householdId}`);
-    });
-
-    socket.on("disconnect", () => {
-      console.log("❌ Real-time user disconnected:", socket.id);
-    });
   });
 
   return io;
 };
 
-// Accessor utility to pull the IO instance into any controller file
 export const getIO = () => {
-  if (!io) throw new Error("Socket.io layer has not been initialized!");
+  if (!io) {
+    throw new Error("Socket.io has not been initialized!");
+  }
   return io;
 };

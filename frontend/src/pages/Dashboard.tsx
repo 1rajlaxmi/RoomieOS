@@ -80,7 +80,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!household?._id) return;
 
-    const socket = io("http://localhost:5000");
+    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
 
     socket.emit("join_household_room", household._id);
 
