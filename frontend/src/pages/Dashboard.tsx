@@ -12,6 +12,7 @@ import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, 
 import { householdService } from "@/services/householdService";
 import { choreService } from "@/services/choreService";
 import { expenseService } from "@/services/expenseService";
+import ReportAndCalendar from "@/components/ReportAndCalendar";
 
 const BackgroundAnimation = () => (
   <div className="fixed inset-0 z-[-1] bg-[#f8fafc] overflow-hidden pointer-events-none">
@@ -97,6 +98,11 @@ export default function Dashboard() {
     socket.on("expenses_data_changed", () => {
       console.log("⚡ Expense ledger or settlement modified!");
       fetchDashboardData();
+    });
+
+    socket.on("calendar_data_changed", () => {
+      console.log("⚡ Calendar or Quiet Hours adjusted remotely!");
+      window.location.reload(); // Quickest way to sync all data elements smoothly
     });
 
     return () => {
@@ -644,7 +650,16 @@ export default function Dashboard() {
             </div>
           </motion.div>
         )}
+        {/* ========================================================================= */}
+            {/* ✅ NEW: CONNECTED PREMIUM FEATURES COMPONENT PANEL                         */}
+            {/* ========================================================================= */}
+            <motion.div variants={slideUp}>
+              <ReportAndCalendar glassCardClass={glassCardClass} />
+            </motion.div>
+            {/* ========================================================================= */}
       </main>
+
+      
 
       {/* STANDARD EXIT MODAL */}
       <AnimatePresence>

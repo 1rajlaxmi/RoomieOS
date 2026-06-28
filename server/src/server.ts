@@ -11,7 +11,9 @@ import authRoutes from "./routes/authRoutes";
 import householdRoutes from "./routes/householdRoutes";
 import expenseRoutes from "./routes/expenseRoutes";
 import choreRoutes from "./routes/choreRoutes";
-import sendEmail from "./utils/sendEmail";
+//import sendEmail from "./utils/sendEmail";
+import eventRoutes from "./routes/eventRoutes";
+import reportRoutes from "./routes/reportRoutes";
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +33,13 @@ app.use("/api/auth", authRoutes);
 app.use("/api/households", householdRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/chores", choreRoutes);
+app.use("/api/households", householdRoutes);
+app.use("/api/chores", choreRoutes);
+app.use("/api/expenses", expenseRoutes);
+
+app.use("/api/events", eventRoutes);
+app.use("/api/reports", reportRoutes);
+
 
 // ✅ Initialize the real-time socket cluster layer
 initSocket(server);
