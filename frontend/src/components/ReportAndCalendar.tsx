@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Calendar, Moon, Award, TrendingUp, Plus, Trash2 } from "lucide-react"; // ✅ Added Trash2 import
 import { Input } from "@/components/ui/input";
 

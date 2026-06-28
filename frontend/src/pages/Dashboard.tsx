@@ -6,23 +6,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Home, LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
+import { LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
 
 // Centralized feature service layers
 import { householdService } from "@/services/householdService";
 import { choreService } from "@/services/choreService";
 import { expenseService } from "@/services/expenseService";
-import ReportAndCalendar from "@/components/ReportAndCalendar";
-
-const BackgroundAnimation = () => (
-  <div className="fixed inset-0 z-[-1] bg-[#f8fafc] overflow-hidden pointer-events-none">
-    <motion.div animate={{ rotate: 360, scale: [1, 1.1, 1] }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-300/20 blur-[100px]" />
-    <motion.div animate={{ x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-violet-300/20 blur-[120px]" />
-    {[...Array(15)].map((_, i) => (
-      <motion.div key={i} animate={{ y: ["100vh", "-10vh"], opacity: [0, 0.8, 0], x: Math.sin(i) * 50 }} transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: "linear", delay: Math.random() * 5 }} className="absolute w-1.5 h-1.5 bg-indigo-500/40 rounded-full blur-[1px]" style={{ left: `${Math.random() * 100}%` }} />
-    ))}
-  </div>
-);
 
 const staggerContainer: any = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.15 } } };
 const slideUp: any = { hidden: { opacity: 0, y: 40 }, visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 100 } } };
@@ -270,7 +259,7 @@ export default function Dashboard() {
     } catch (err: any) { setError(err.message); setRoommateToEvict(null); }
   };
 
-  const handleLogout = () => { localStorage.removeItem("token"); localStorage.removeItem("user"); navigate("/login"); };
+
 
   // Data processing memo streams
   const expenseChartData = useMemo(() => {
@@ -312,33 +301,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen font-sans flex flex-col relative overflow-clip text-slate-900">
-      <BackgroundAnimation />
+
 
       {/* STICKY NAVBAR */}
-      <nav className="sticky top-4 z-50 mx-4 sm:mx-8">
-        <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-xl h-20 px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-tr from-indigo-600 to-violet-500 p-2.5 rounded-2xl text-white shadow-lg"><Home size={24} strokeWidth={2.5} /></div>
-            <h1 className="text-2xl font-black tracking-tighter hidden sm:block">RoomieOS</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="flex -space-x-3">
-                {household?.members?.slice(0, 3).map((m: any, i: number) => (
-                  <img key={i} src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-9 h-9 rounded-full border-2 border-white bg-slate-100 relative z-10 shadow-sm" alt="avatar" />
-                ))}
-              </div>
-              <div className="bg-slate-100 px-4 py-2 rounded-full flex flex-col justify-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-sm font-bold text-slate-700">{user.name}</span>
-                </div>
-              </div>
-            </div>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 px-5 py-2.5 rounded-full transition-all"><LogOut size={16} /> Logout</button>
-          </div>
-        </motion.div>
-      </nav>
+
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-20 w-full z-10">
         {error && <div className="mb-8 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center font-bold text-sm">{error}</div>}
@@ -475,7 +441,7 @@ export default function Dashboard() {
 
             {/* ACTION FORMS AND PIPELINES */}
             <div className="grid lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-4 space-y-8">
+              <div className="lg:col-span-4 space-y-8 relative z-30">
                 <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                   <h2 className="text-xl font-black mb-6">Add Expense</h2>
                   <form onSubmit={handleAddExpense} className="space-y-4">
@@ -484,49 +450,90 @@ export default function Dashboard() {
                     <button type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer"><Plus size={20} className="mr-2" />Split Bill</button>
                   </form>
                 </motion.div>
+<motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass + " !overflow-visible relative z-50"}>
+  <h2 className="text-xl font-black mb-6">Assign Task</h2>
+  <form onSubmit={handleAddChore} className="space-y-4">
+    <Input 
+      placeholder="Vacuum the rug..." 
+      required 
+      value={choreTitle} 
+      onChange={(e) => setChoreTitle(e.target.value)} 
+      className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5" 
+    />
 
-                <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
-                  <h2 className="text-xl font-black mb-6">Assign Task</h2>
-                  <form onSubmit={handleAddChore} className="space-y-4">
-                    <Input placeholder="Vacuum the rug..." required value={choreTitle} onChange={(e) => setChoreTitle(e.target.value)} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5" />
+    {/* ✨ RESTORED: Your original gorgeous custom selection trigger frame */}
+    <div className="relative z-50">
+      <div 
+        onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)} 
+        className="flex h-14 w-full rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/70 items-center justify-between px-5 font-bold cursor-pointer text-slate-700 select-none transition-all"
+      >
+        <div className="flex items-center gap-3">
+          {choreAssignee ? (() => {
+            const matchObj = household.members?.find((m: any) => m._id === choreAssignee);
+            return matchObj ? (
+              <> 
+                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${matchObj.name}`} className="w-6 h-6 rounded-full bg-slate-200" alt="avatar" /> 
+                <span className="text-sm font-black text-slate-800">{matchObj.name}</span> 
+              </>
+            ) : <span className="text-slate-400 text-sm">Select roommate...</span>;
+          })() : <span className="text-slate-400 text-sm">Select roommate...</span>}
+        </div>
+        <motion.div animate={{ rotate: isChoreDropdownOpen ? 180 : 0 }} className="text-slate-400">
+          <ChevronDown size={18} strokeWidth={2.5} />
+        </motion.div>
+      </div>
 
-                    <div className="relative">
-                      <div onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)} className="flex h-14 w-full rounded-2xl bg-slate-50 items-center justify-between px-5 font-bold cursor-pointer text-slate-700 select-none">
-                        <div className="flex items-center gap-3">
-                          {choreAssignee ? (() => {
-                            const matchObj = household.members?.find((m: any) => m._id === choreAssignee);
-                            return matchObj ? (<> <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${matchObj.name}`} className="w-6 h-6 rounded-full bg-slate-200" alt="avatar" /> <span>{matchObj.name}</span> </>) : <span className="text-slate-400">Select roommate</span>;
-                          })() : <span className="text-slate-400">Select roommate</span>}
-                        </div>
-                        <motion.div animate={{ rotate: isChoreDropdownOpen ? 180 : 0 }} className="text-slate-400"><ChevronDown size={20} /></motion.div>
-                      </div>
-                      <AnimatePresence>
-                        {isChoreDropdownOpen && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setIsChoreDropdownOpen(false)} />
-                            <motion.div initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} className="absolute z-50 left-0 right-0 mt-2 bg-white/90 backdrop-blur-2xl rounded-2xl border shadow-2xl max-h-56 overflow-y-auto">
-                              {household.members?.map((member: any) => (
-                                <div key={member._id} onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }} className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50"}`}>
-                                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
-                                  <span className="text-sm">{member.name}</span>
-                                </div>
-                              ))}
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer"><CheckCircle2 size={20} className="mr-2" /> Delegate</button>
-                  </form>
-                  <AnimatePresence>
-                    {choreError && (
-                      <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1, x: [0, -8, 8, -8, 8, 0] }} exit={{ opacity: 0 }} className="mt-4 p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs text-center border flex items-center justify-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> {choreError}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+      {/* ✨ OVERLAY LIST: Your premium list wrapper now engineered with breakout z-indexing */}
+      {/* ✨ OVERLAY LIST: Cap the height and enable scrolling */}
+{/* 1. THE DROPDOWN LIST (Controlled by isChoreDropdownOpen) */}
+<AnimatePresence>
+  {isChoreDropdownOpen && (
+    <>
+      <div className="fixed inset-0 z-[60]" onClick={() => setIsChoreDropdownOpen(false)} />
+      
+      <motion.div 
+        initial={{ opacity: 0, y: -10, scale: 0.95 }} 
+        animate={{ opacity: 1, y: 0, scale: 1 }} 
+        exit={{ opacity: 0, y: -10, scale: 0.95 }} 
+        className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-2xl rounded-2xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] max-h-48 overflow-y-auto z-[70] scrollbar-thin scrollbar-thumb-slate-200"
+      >
+        {household.members?.map((member: any) => (
+          <div 
+            key={member._id} 
+            onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }} 
+            className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-all ${
+              choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
+            }`}
+          >
+            <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
+            <span className="text-sm font-black">{member.name} {member._id === user?._id ? "(You)" : ""}</span>
+          </div>
+        ))}
+      </motion.div>
+    </>
+  )}
+</AnimatePresence>
 
+{/* 2. THE ERROR BOX BELOW (Controlled by choreError) */}
+<AnimatePresence>
+  {choreError && (
+    <motion.div 
+      initial={{ opacity: 0, y: 10, scale: 0.95 }} 
+      animate={{ opacity: 1, y: 0, scale: 1, x: [0, -8, 8, -8, 8, 0] }} 
+      exit={{ opacity: 0 }} 
+      className="mt-4 p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs text-center border flex items-center justify-center gap-2"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> {choreError}
+    </motion.div>
+  )}
+</AnimatePresence>
+    </div>
+
+    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer transition-all hover:bg-emerald-600">
+      <CheckCircle2 size={20} className="mr-2" /> Delegate
+    </button>
+  </form>
+</motion.div>
                 {isAdmin && (
                   <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                     <h2 className="text-xl font-black mb-4 flex items-center gap-2"><Users size={20} /> Residents List</h2>
@@ -547,7 +554,7 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div className="lg:col-span-8 space-y-8">
+              <div className="lg:col-span-8 space-y-8 relative z-10">
                 <motion.div variants={slideUp} className="space-y-4">
                   <h2 className="text-2xl font-black flex items-center gap-2"><Activity className="text-indigo-500" /> Recent Activity</h2>
                   <AnimatePresence>
@@ -650,16 +657,9 @@ export default function Dashboard() {
             </div>
           </motion.div>
         )}
-        {/* ========================================================================= */}
-            {/* ✅ NEW: CONNECTED PREMIUM FEATURES COMPONENT PANEL                         */}
-            {/* ========================================================================= */}
-            <motion.div variants={slideUp}>
-              <ReportAndCalendar glassCardClass={glassCardClass} />
-            </motion.div>
-            {/* ========================================================================= */}
       </main>
 
-      
+
 
       {/* STANDARD EXIT MODAL */}
       <AnimatePresence>
@@ -769,18 +769,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      <footer className="w-full bg-white/70 backdrop-blur-2xl border-t mt-auto py-8 z-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white"><Home size={20} /></div>
-            <div>
-              <span className="font-black text-xl text-slate-900 tracking-tight block leading-tight">RoomieOS</span>
-              <span className="text-xs font-bold text-slate-400">Automate your apartment.</span>
-            </div>
-          </div>
-          <span className="text-sm font-bold text-slate-400">© 2026 RoomieOS</span>
-        </div>
-      </footer>
+
     </div>
   );
 }

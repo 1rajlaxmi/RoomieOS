@@ -2,24 +2,28 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Scheduler from "./pages/Scheduler";     
+import ReportCard from "./pages/ReportCard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Layout from "./components/Layout";
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
         {/* 🛡️ Protected Route Group */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          {/* Any other private sub-pages you add later go right here! */}
+          {/* 👥 Master UI Layout Wrapper */}
+          <Route element={<Layout />}> 
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/scheduler" element={<Scheduler />} />
+            <Route path="/report-card" element={<ReportCard />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;
