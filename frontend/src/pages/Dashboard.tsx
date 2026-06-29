@@ -26,6 +26,11 @@ export default function Dashboard() {
   const [chores, setChores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 📑 NEW: Pagination Tracking Indices (Defaults to Page 1)
+  const [expensePage, setExpensePage] = useState(1);
+  const [chorePage, setChorePage] = useState(1);
+  const itemsPerPage = 3; // Strict card item display allowance per page window
+
   const [createName, setCreateName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [expenseDesc, setExpenseDesc] = useState("");
@@ -421,7 +426,7 @@ export default function Dashboard() {
                   <h2 className="text-2xl font-black tracking-tight">Chore Productivity</h2>
                 </div>
                 <div className="h-64 w-full relative min-w-0">
-                  {/* ✅ FIXED: Handed concrete layout numeric scale properties to Pie Container */}
+
                   {household?._id && (
                     <ResponsiveContainer width="100%" height={250} minWidth={0}>
                       <PieChart>
@@ -450,90 +455,89 @@ export default function Dashboard() {
                     <button type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer"><Plus size={20} className="mr-2" />Split Bill</button>
                   </form>
                 </motion.div>
-<motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass + " !overflow-visible relative z-50"}>
-  <h2 className="text-xl font-black mb-6">Assign Task</h2>
-  <form onSubmit={handleAddChore} className="space-y-4">
-    <Input 
-      placeholder="Vacuum the rug..." 
-      required 
-      value={choreTitle} 
-      onChange={(e) => setChoreTitle(e.target.value)} 
-      className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5" 
-    />
+                <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass + " !overflow-visible relative z-50"}>
+                  <h2 className="text-xl font-black mb-6">Assign Task</h2>
+                  <form onSubmit={handleAddChore} className="space-y-4">
+                    <Input
+                      placeholder="Vacuum the rug..."
+                      required
+                      value={choreTitle}
+                      onChange={(e) => setChoreTitle(e.target.value)}
+                      className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5"
+                    />
 
-    {/* ✨ RESTORED: Your original gorgeous custom selection trigger frame */}
-    <div className="relative z-50">
-      <div 
-        onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)} 
-        className="flex h-14 w-full rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/70 items-center justify-between px-5 font-bold cursor-pointer text-slate-700 select-none transition-all"
-      >
-        <div className="flex items-center gap-3">
-          {choreAssignee ? (() => {
-            const matchObj = household.members?.find((m: any) => m._id === choreAssignee);
-            return matchObj ? (
-              <> 
-                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${matchObj.name}`} className="w-6 h-6 rounded-full bg-slate-200" alt="avatar" /> 
-                <span className="text-sm font-black text-slate-800">{matchObj.name}</span> 
-              </>
-            ) : <span className="text-slate-400 text-sm">Select roommate...</span>;
-          })() : <span className="text-slate-400 text-sm">Select roommate...</span>}
-        </div>
-        <motion.div animate={{ rotate: isChoreDropdownOpen ? 180 : 0 }} className="text-slate-400">
-          <ChevronDown size={18} strokeWidth={2.5} />
-        </motion.div>
-      </div>
+                    {/* ✨ RESTORED: Your original gorgeous custom selection trigger frame */}
+                    <div className="relative z-50">
+                      <div
+                        onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)}
+                        className="flex h-14 w-full rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/70 items-center justify-between px-5 font-bold cursor-pointer text-slate-700 select-none transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          {choreAssignee ? (() => {
+                            const matchObj = household.members?.find((m: any) => m._id === choreAssignee);
+                            return matchObj ? (
+                              <>
+                                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${matchObj.name}`} className="w-6 h-6 rounded-full bg-slate-200" alt="avatar" />
+                                <span className="text-sm font-black text-slate-800">{matchObj.name}</span>
+                              </>
+                            ) : <span className="text-slate-400 text-sm">Select roommate...</span>;
+                          })() : <span className="text-slate-400 text-sm">Select roommate...</span>}
+                        </div>
+                        <motion.div animate={{ rotate: isChoreDropdownOpen ? 180 : 0 }} className="text-slate-400">
+                          <ChevronDown size={18} strokeWidth={2.5} />
+                        </motion.div>
+                      </div>
 
-      {/* ✨ OVERLAY LIST: Your premium list wrapper now engineered with breakout z-indexing */}
-      {/* ✨ OVERLAY LIST: Cap the height and enable scrolling */}
-{/* 1. THE DROPDOWN LIST (Controlled by isChoreDropdownOpen) */}
-<AnimatePresence>
-  {isChoreDropdownOpen && (
-    <>
-      <div className="fixed inset-0 z-[60]" onClick={() => setIsChoreDropdownOpen(false)} />
-      
-      <motion.div 
-        initial={{ opacity: 0, y: -10, scale: 0.95 }} 
-        animate={{ opacity: 1, y: 0, scale: 1 }} 
-        exit={{ opacity: 0, y: -10, scale: 0.95 }} 
-        className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-2xl rounded-2xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] max-h-48 overflow-y-auto z-[70] scrollbar-thin scrollbar-thumb-slate-200"
-      >
-        {household.members?.map((member: any) => (
-          <div 
-            key={member._id} 
-            onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }} 
-            className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-all ${
-              choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
-            }`}
-          >
-            <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
-            <span className="text-sm font-black">{member.name} {member._id === user?._id ? "(You)" : ""}</span>
-          </div>
-        ))}
-      </motion.div>
-    </>
-  )}
-</AnimatePresence>
+                      {/* ✨ OVERLAY LIST: Your premium list wrapper now engineered with breakout z-indexing */}
+                      {/* ✨ OVERLAY LIST: Cap the height and enable scrolling */}
+                      {/* 1. THE DROPDOWN LIST (Controlled by isChoreDropdownOpen) */}
+                      <AnimatePresence>
+                        {isChoreDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-[60]" onClick={() => setIsChoreDropdownOpen(false)} />
 
-{/* 2. THE ERROR BOX BELOW (Controlled by choreError) */}
-<AnimatePresence>
-  {choreError && (
-    <motion.div 
-      initial={{ opacity: 0, y: 10, scale: 0.95 }} 
-      animate={{ opacity: 1, y: 0, scale: 1, x: [0, -8, 8, -8, 8, 0] }} 
-      exit={{ opacity: 0 }} 
-      className="mt-4 p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs text-center border flex items-center justify-center gap-2"
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> {choreError}
-    </motion.div>
-  )}
-</AnimatePresence>
-    </div>
+                            <motion.div
+                              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                              className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-2xl rounded-2xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] max-h-48 overflow-y-auto z-[70] scrollbar-thin scrollbar-thumb-slate-200"
+                            >
+                              {household.members?.map((member: any) => (
+                                <div
+                                  key={member._id}
+                                  onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }}
+                                  className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-all ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
+                                    }`}
+                                >
+                                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
+                                  <span className="text-sm font-black">{member.name} {member._id === user?._id ? "(You)" : ""}</span>
+                                </div>
+                              ))}
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
 
-    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer transition-all hover:bg-emerald-600">
-      <CheckCircle2 size={20} className="mr-2" /> Delegate
-    </button>
-  </form>
-</motion.div>
+                      {/* 2. THE ERROR BOX BELOW (Controlled by choreError) */}
+                      <AnimatePresence>
+                        {choreError && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1, x: [0, -8, 8, -8, 8, 0] }}
+                            exit={{ opacity: 0 }}
+                            className="mt-4 p-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-xs text-center border flex items-center justify-center gap-2"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> {choreError}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button type="submit" className="w-full h-14 rounded-2xl bg-emerald-500 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer transition-all hover:bg-emerald-600">
+                      <CheckCircle2 size={20} className="mr-2" /> Delegate
+                    </button>
+                  </form>
+                </motion.div>
                 {isAdmin && (
                   <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                     <h2 className="text-xl font-black mb-4 flex items-center gap-2"><Users size={20} /> Residents List</h2>
@@ -556,46 +560,92 @@ export default function Dashboard() {
 
               <div className="lg:col-span-8 space-y-8 relative z-10">
                 <motion.div variants={slideUp} className="space-y-4">
-                  <h2 className="text-2xl font-black flex items-center gap-2"><Activity className="text-indigo-500" /> Recent Activity</h2>
-                  <AnimatePresence>
-                    {expenses.map((expense: any) => (
-                      <motion.div key={expense._id} layout whileHover={hoverCard} className={glassCardClass + " !p-6"}>
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex items-center gap-4">
-                            <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${expense.paidBy?.name}`} className="w-12 h-12 rounded-2xl bg-indigo-50" alt="avatar" />
-                            <div>
-                              <h3 className="font-black text-xl">{expense.description}</h3>
-                              <p className="text-sm font-bold text-slate-500">Paid by {expense.paidBy?.name === user.name ? "You" : expense.paidBy?.name}</p>
-                            </div>
-                          </div>
-                          <span className="font-black text-2xl">₹{expense.amount.toFixed(2)}</span>
-                        </div>
-                        <div className="bg-slate-50 rounded-2xl p-2 space-y-1">
-                          {expense.splits?.map((split: any, idx: number) => {
-                            const needsPaying = !split.isPaid && expense.paidBy?._id === user._id && split.user?._id !== user._id;
-                            return (
-                              <div key={idx} className="flex justify-between items-center p-3 font-bold bg-white rounded-xl shadow-sm">
-                                <span>{split.user?.name}</span>
-                                <div className="flex items-center gap-3">
-                                  <span className={split.isPaid ? "text-emerald-500" : "text-slate-900"}>₹{split.amountOwed?.toFixed(2)} {split.isPaid && "✓"}</span>
-                                  {needsPaying && <button onClick={() => handleSettle(expense._id, split.user?._id)} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold">Settle</button>}
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-black flex items-center gap-2"><Activity className="text-indigo-500" /> Recent Activity</h2>
+
+                    {/* Page Badge Indicator */}
+                    {expenses.length > itemsPerPage && (
+                      <span className="text-xs font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
+                        Page {expensePage} of {Math.ceil(expenses.length / itemsPerPage)}
+                      </span>
+                    )}
+                  </div>
+                  <AnimatePresence mode="popLayout">
+                    {expenses.length === 0 ? (
+                      <div className={glassCardClass + " text-center py-8 text-slate-400 font-bold text-sm"}>No recent bills logged.</div>
+                    ) : (
+                      expenses
+                        // Slices the active array bucket context natively based on current page
+                        .slice((expensePage - 1) * itemsPerPage, expensePage * itemsPerPage)
+                        .map((expense: any) => (
+                          <motion.div key={expense._id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} whileHover={hoverCard} className={glassCardClass + " !p-6"}>
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="flex items-center gap-4">
+                                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${expense.paidBy?.name}`} className="w-12 h-12 rounded-2xl bg-indigo-50" alt="avatar" />
+                                <div>
+                                  <h3 className="font-black text-xl">{expense.description}</h3>
+                                  <p className="text-sm font-bold text-slate-500">Paid by {expense.paidBy?.name === user.name ? "You" : expense.paidBy?.name}</p>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </motion.div>
-                    ))}
+                              <span className="font-black text-2xl">₹{expense.amount.toFixed(2)}</span>
+                            </div>
+                            <div className="bg-slate-50 rounded-2xl p-2 space-y-1">
+                              {expense.splits?.map((split: any, idx: number) => {
+                                const needsPaying = !split.isPaid && expense.paidBy?._id === user._id && split.user?._id !== user._id;
+                                return (
+                                  <div key={idx} className="flex justify-between items-center p-3 font-bold bg-white rounded-xl shadow-sm">
+                                    <span>{split.user?.name}</span>
+                                    <div className="flex items-center gap-3">
+                                      <span className={split.isPaid ? "text-emerald-500" : "text-slate-900"}>₹{split.amountOwed?.toFixed(2)} {split.isPaid && "✓"}</span>
+                                      {needsPaying && <button onClick={() => handleSettle(expense._id, split.user?._id)} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold cursor-pointer">Settle</button>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        ))
+                    )}
                   </AnimatePresence>
+
+                  {/* Expense Pagination Controls row layout */}
+                  {/* Polished Recent Activity Pagination Controls */}
+                  {expenses.length > itemsPerPage && (
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100/60 mt-4">
+                      <button
+                        disabled={expensePage === 1}
+                        onClick={() => setExpensePage(prev => Math.max(prev - 1, 1))}
+                        className="px-5 py-2.5 text-xs font-black text-slate-700 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        disabled={expensePage >= Math.ceil(expenses.length / itemsPerPage)}
+                        onClick={() => setExpensePage(prev => prev + 1)}
+                        className="px-5 py-2.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
 
                 {/* --- PENDING TASKS COLOUR BLOCK LAYER --- */}
                 <motion.div variants={slideUp} className="space-y-4">
-                  <h2 className="text-2xl font-black flex items-center gap-2"><Trash2 className="text-emerald-500" /> Pending Tasks</h2>
-
-                  <AnimatePresence>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-black flex items-center gap-2">
+                      <CheckCircle2 className="text-emerald-500" /> Pending Tasks
+                    </h2>
+                    {chores.filter(c => !c.isCompleted).length > itemsPerPage && (
+                      <span className="text-xs font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
+                        Page {chorePage} of {Math.ceil(chores.filter(c => !c.isCompleted).length / itemsPerPage)}
+                      </span>
+                    )}
+                  </div>
+                  <AnimatePresence mode="popLayout">
                     {choreFeedError && (
-                      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1, x: [0, -10, 10, -10, 10, 0] }} exit={{ opacity: 0 }} className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl text-center">
+
+                      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl text-center">
                         ⚠️ {choreFeedError}
                       </motion.div>
                     )}
@@ -604,54 +654,59 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     <AnimatePresence mode="popLayout">
                       {isCreatingTask && (
-                        <motion.div
-                          key="single-task-skeleton"
-                          initial={{ opacity: 0, height: 0, y: -20, scale: 0.95 }}
-                          animate={{ opacity: 1, height: "auto", y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                          transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                          className={glassCardClass + " !p-5 flex items-center gap-5 border-dashed border-indigo-300 bg-indigo-50/10"}
-                        >
-                          <Skeleton className="h-12 w-12 rounded-2xl bg-indigo-200/50 animate-pulse flex-shrink-0" />
+                        <motion.div key="single-task-skeleton" initial={{ opacity: 0, height: 0, y: -20 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0 }} className={glassCardClass + " !p-5 flex items-center gap-5 border-dashed border-indigo-300 bg-indigo-50/10"}>
+                          <Skeleton className="h-12 w-12 rounded-2xl bg-indigo-200/50 flex-shrink-0 animate-pulse" />
                           <div className="space-y-2.5 flex-1">
-                            <Skeleton className="h-5 w-1/2 bg-slate-200/80 animate-pulse rounded-lg" />
-                            <Skeleton className="h-4 w-1/4 bg-slate-100 animate-pulse rounded-md" />
+                            <Skeleton className="h-5 w-1/2 bg-slate-200/80 rounded-lg animate-pulse" />
+                            <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-md animate-pulse" />
                           </div>
                         </motion.div>
                       )}
 
-                      {chores.length === 0 && !isCreatingTask ? (
-                        <div className="text-center py-8 text-slate-400 font-bold text-sm">No pending tasks for your room! 🎉</div>
+                      {chores.filter(c => !c.isCompleted).length === 0 && !isCreatingTask ? (
+                        <div className={glassCardClass + " text-center py-8 text-slate-400 font-bold text-sm"}>No pending tasks for your room! 🎉</div>
                       ) : (
-                        chores.map((chore: any) => (
-                          <motion.div
-                            key={chore._id}
-                            layout
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            whileHover={hoverCard}
-                            className={glassCardClass + ` !p-5 flex items-center gap-5 ${chore.isCompleted ? "opacity-50" : ""}`}
-                          >
-                            <button
-                              onClick={() => handleToggleChore(chore._id)}
-                              className={`h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${chore.isCompleted ? "bg-emerald-500 border-emerald-500 scale-100" : "border-slate-300 bg-slate-50 hover:border-emerald-400"
-                                }`}
-                            >
-                              {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
-                            </button>
-                            <div>
-                              <p className={`text-xl font-black transition-all ${chore.isCompleted ? "line-through text-slate-400" : ""}`}>{chore.title}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo?.name}`} className="w-5 h-5 rounded-full bg-emerald-100" alt="avatar" />
-                                <p className="text-sm font-bold text-slate-500">For {chore.assignedTo?.name === user?.name ? "You" : chore.assignedTo?.name}</p>
+                        chores
+                          // Filters only pending items first, then slices current window bounds
+                          .filter((c: any) => !c.isCompleted)
+                          .slice((chorePage - 1) * itemsPerPage, chorePage * itemsPerPage)
+                          .map((chore: any) => (
+                            <motion.div key={chore._id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} whileHover={hoverCard} className={glassCardClass + " !p-5 flex items-center gap-5"}>
+                              <button onClick={() => handleToggleChore(chore._id)} className="h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 border-slate-300 bg-slate-50 hover:border-emerald-400 cursor-pointer">
+                                {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
+                              </button>
+                              <div>
+                                <p className="text-xl font-black text-slate-900">{chore.title}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${chore.assignedTo?.name}`} className="w-5 h-5 rounded-full bg-emerald-100" alt="avatar" />
+                                  <p className="text-sm font-bold text-slate-500">For {chore.assignedTo?.name === user?.name ? "You" : chore.assignedTo?.name}</p>
+                                </div>
                               </div>
-                            </div>
-                          </motion.div>
-                        ))
+                            </motion.div>
+                          ))
                       )}
                     </AnimatePresence>
-                  </div>
+                  </div>{/* Chore Pagination Controls row layout */}
+                  {/* Polished Pending Tasks Pagination Controls */}
+                  {chores.filter(c => !c.isCompleted).length > itemsPerPage && (
+                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100/60 mt-4">
+                      <button
+                        disabled={chorePage === 1}
+                        onClick={() => setChorePage(prev => Math.max(prev - 1, 1))}
+                        className="px-5 py-2.5 text-xs font-black text-slate-700 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        disabled={chorePage >= Math.ceil(chores.filter(c => !c.isCompleted).length / itemsPerPage)}
+                        onClick={() => setChorePage(prev => prev + 1)}
+                        className="px-5 py-2.5 text-xs font-black text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
+
                 </motion.div>
               </div>
             </div>
