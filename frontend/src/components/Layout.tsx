@@ -86,16 +86,41 @@ export default function Layout() {
       </div>
 
       {/* GLOBAL FOOTER */}
-      <footer className="w-full bg-white/70 backdrop-blur-2xl border-t mt-auto py-8 z-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white"><Home size={20} /></div>
+     <footer className="w-full bg-[#0f172a] mt-auto relative z-20 overflow-hidden select-none">
+        
+        {/* Neon accent top boundary edge line */}
+        <div className="w-full h-[3px] bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+
+        <div className="max-w-7xl mx-auto px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          
+          {/* Left Block: Deep Charcoal & Bright Brand Contrast */}
+          <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate("/dashboard")}>
+            <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-slate-950 shadow-lg shadow-black/20">
+              <Home size={22} strokeWidth={2.5} />
+            </div>
             <div>
-              <span className="font-black text-xl text-slate-900 tracking-tight block leading-tight">RoomieOS</span>
-              <span className="text-xs font-bold text-slate-400">Automate your apartment.</span>
+              <span className="font-black text-2xl text-white tracking-tight block leading-none">
+                Roomie<span className="text-indigo-400">OS</span>
+              </span>
+              <span className="text-xs font-bold text-slate-400 block tracking-tight mt-1.5">
+                The architecture for shared living space.
+              </span>
             </div>
           </div>
-          <span className="text-sm font-bold text-slate-400">© 2026 RoomieOS</span>
+
+          {/* Right Block: Structured Badging & Copyright Status */}
+          <div className="flex flex-col items-center md:items-end gap-2.5">
+            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 px-3 py-1.5 rounded-xl">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+              <span className="text-[10px] font-mono font-black text-slate-300 uppercase tracking-widest">
+                System Active v1.2
+              </span>
+            </div>
+            <span className="text-xs font-bold text-slate-500 tracking-tight">
+              © 2026 RoomieOS Systems. All rights reserved.
+            </span>
+          </div>
+
         </div>
       </footer>
     </div>

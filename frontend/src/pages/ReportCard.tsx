@@ -61,8 +61,6 @@ export default function ReportCard() {
             </div>
           </div>
         </div>
-
-        
       </motion.div>
     </main>
   );
