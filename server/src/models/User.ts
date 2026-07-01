@@ -7,6 +7,8 @@ export interface IUser extends Document {
   email: string;
   password: string;
   comparePassword(candidatePassword: string): Promise<boolean>;
+
+  household?: mongoose.Types.ObjectId | string | null;
 }
 
 // 2. Mongoose Schema
@@ -15,6 +17,7 @@ const UserSchema: Schema = new Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
+    household: { type: Schema.Types.ObjectId, ref: "Household", default: null }
   },
   { timestamps: true } // Automatically adds createdAt and updatedAt
 );

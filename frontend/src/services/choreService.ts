@@ -1,57 +1,35 @@
-const API_URL = "http://localhost:5000/api/chores";
+import { apiRequest } from "./api"; 
 
 export const choreService = {
-  // 1. ✅ FETCH ALL METHOD: The missing function your dashboard is looking for
+  // 1. ✅ FETCH ALL METHOD
   getAll: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(API_URL, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to pull household chore logs.");
+    try {
+      // Pass the method type inside the options config wrapper
+      return await apiRequest("/chores", { method: "GET" });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to pull household chore logs.");
     }
-    return await response.json();
   },
 
   // 2. CREATE / DELEGATE TASK METHOD
   create: async (title: string, assignedTo: string) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      },
-      body: JSON.stringify({ title, assignedTo })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Failed to create task.");
+    try {
+      // Pass both method and stringified data body inside a single options block object
+      return await apiRequest("/chores", {
+        method: "POST",
+        body: JSON.stringify({ title, assignedTo })
+      });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to create task.");
     }
-    return await response.json(); // Returns the optimized fresh array back to the state wrapper
   },
 
   // 3. TOGGLE COMPLETION STATUS METHOD
   toggleStatus: async (choreId: string) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(`${API_URL}/${choreId}/toggle`, {
-      method: "PUT",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Failed to toggle item.");
+    try {
+      return await apiRequest(`/chores/${choreId}/toggle`, { method: "PUT" });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to toggle item.");
     }
-    return await response.json();
   }
 };

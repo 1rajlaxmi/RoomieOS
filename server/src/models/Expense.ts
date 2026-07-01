@@ -24,7 +24,8 @@ const ExpenseSchema: Schema = new Schema(
     description: { 
       type: String, 
       required: true,
-      trim: true
+      trim: true,
+      maxlength: [150, "Expense description cannot exceed 150 characters."] // 🛡️ GUARD LIMIT
     },
     amount: { 
       type: Number, 

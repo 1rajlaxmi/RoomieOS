@@ -15,7 +15,8 @@ const ChoreSchema: Schema = new Schema(
     title: { 
       type: String, 
       required: true,
-      trim: true
+      trim: true,
+      maxlength: [100, "Chore title cannot exceed 100 characters."] // 🛡️ GUARD LIMIT
     },
     assignedTo: {
       type: Schema.Types.ObjectId,

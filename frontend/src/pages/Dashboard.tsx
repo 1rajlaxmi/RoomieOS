@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie} from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,10 +26,10 @@ export default function Dashboard() {
   const [chores, setChores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 📑 NEW: Pagination Tracking Indices (Defaults to Page 1)
+  // Pagination Tracking Indices
   const [expensePage, setExpensePage] = useState(1);
   const [chorePage, setChorePage] = useState(1);
-  const itemsPerPage = 3; // Strict card item display allowance per page window
+  const itemsPerPage = 3;
 
   const [createName, setCreateName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -54,16 +54,29 @@ export default function Dashboard() {
 
   const isAdmin = useMemo(() => {
     if (!household || !user) return false;
-    return household.owner === user._id;
+    const ownerIdStr = typeof household.owner === "object" && household.owner?._id
+      ? household.owner._id.toString()
+      : household.owner?.toString();
+    const userIdStr = user._id?.toString();
+    return ownerIdStr === userIdStr;
   }, [household, user]);
 
+  // =========================================================================
+  // 🛡️ REPLACED: Fresh hydration from the backend database directly on mount
+  // =========================================================================
   useEffect(() => {
-    // Since ProtectedRoute guarantees the user is valid, we can safely grab and parse data instantly!
-    const storedUser = localStorage.getItem("user")!;
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) {
+      navigate("/login");
+      return;
+    }
 
     try {
-      setUser(JSON.parse(storedUser));
-      fetchDashboardData();
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+
+      // Immediately run the hydration function to verify fresh database state
+      initializeDashboardContext();
     } catch (err) {
       console.error("Profile synchronization failure. Re-authenticating...");
       localStorage.clear();
@@ -71,60 +84,37 @@ export default function Dashboard() {
     }
   }, [navigate]);
 
-  // Real-Time WS Sync Hook Layer
-  useEffect(() => {
-    if (!household?._id) return;
-
-    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
-
-    socket.emit("join_household_room", household._id);
-
-    socket.on("household_data_changed", () => {
-      console.log("⚡ Real-time Event: Roommate array adjusted! Re-fetching data...");
-      fetchDashboardData();
-    });
-
-    socket.on("chores_data_changed", async () => {
-      console.log("⚡ Chore modified remotely!");
-      await fetchDashboardData();
-    });
-
-    socket.on("expenses_data_changed", () => {
-      console.log("⚡ Expense ledger or settlement modified!");
-      fetchDashboardData();
-    });
-
-    socket.on("calendar_data_changed", () => {
-      console.log("⚡ Calendar or Quiet Hours adjusted remotely!");
-      window.location.reload(); // Quickest way to sync all data elements smoothly
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [household?._id]);
-
-  // Clean data fetcher orchestration layer
-  const fetchDashboardData = async () => {
+  // New combined data initialization orchestration layer
+  // New combined data initialization orchestration layer
+  const initializeDashboardContext = async () => {
+    if (!localStorage.getItem("token")) return;
     try {
-      const data = await householdService.getProfile();
+      setLoading(true);
+      setError("");
 
-      if (data && data._id) {
-        setHousehold(data);
+      // 🚀 FIXED: Changed getHouseholdDetails() to getProfile()
+      const freshUserResponse = await householdService.getProfile();
 
+      if (freshUserResponse && freshUserResponse._id) {
+        // If the backend returns a household document, set it to state immediately
+        setHousehold(freshUserResponse);
+
+        // Since we have a valid household, load the child arrays cleanly
         const [fetchedExpenses, fetchedChores] = await Promise.all([
-          expenseService.getAll(),
+          expenseService.getHouseholdExpenses(),
           choreService.getAll()
         ]);
-        setExpenses(fetchedExpenses);
-        setChores(fetchedChores);
+
+        setExpenses(Array.isArray(fetchedExpenses) ? fetchedExpenses : []);
+        setChores(Array.isArray(fetchedChores) ? fetchedChores : []);
       } else {
+        // No active household relationship found on the backend profile map
         setHousehold(null);
         setExpenses([]);
         setChores([]);
       }
     } catch (err: any) {
-      console.error("Dashboard synchronization issue:", err);
+      console.error("Dashboard context hydration failure:", err);
       setHousehold(null);
       setExpenses([]);
       setChores([]);
@@ -132,6 +122,56 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+
+  // Replaces your old fetchDashboardData to act as a silent background socket sync
+  const fetchDashboardData = async () => {
+    if (!household?._id) return;
+    try {
+      const [fetchedExpenses, fetchedChores] = await Promise.all([
+        expenseService.getHouseholdExpenses(),
+        choreService.getAll()
+      ]);
+      setExpenses(Array.isArray(fetchedExpenses) ? fetchedExpenses : []);
+      setChores(Array.isArray(fetchedChores) ? fetchedChores : []);
+    } catch (err: any) {
+      console.error("Background sync failure:", err);
+    }
+  };
+  // =========================================================================
+
+  // 🔄 RETAINED: Real-Time WS Sync Hook Layer follows right below completely unchanged
+  useEffect(() => {
+    if (!household || !household._id || !user || !user._id) {
+      return;
+    }
+
+    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
+
+    socket.emit("join_household_room", {
+      householdId: household._id,
+      userId: user._id
+    });
+
+    socket.on("household_data_changed", () => {
+      fetchDashboardData();
+    });
+
+    socket.on("chores_data_changed", async () => {
+      await fetchDashboardData();
+    });
+
+    socket.on("expenses_data_changed", () => {
+      fetchDashboardData();
+    });
+
+    socket.on("calendar_data_changed", async () => {
+      await fetchDashboardData();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [household?._id, user?._id]);
 
   const handlePasteCode = async () => {
     try {
@@ -142,38 +182,68 @@ export default function Dashboard() {
 
   const handleCreateSpace = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
-      await householdService.create(createName);
+      const updatedHousehold = await householdService.create(createName);
       setCreateName("");
-      window.location.reload();
-    } catch (err: any) { setError(err.message); }
+
+      // ✅ REAL-TIME FIX: Smooth inline transition instead of layout window reload
+      setHousehold(updatedHousehold);
+      if (user) {
+        const freshUserProfile = { ...user, household: updatedHousehold };
+        localStorage.setItem("user", JSON.stringify(freshUserProfile));
+        setUser(freshUserProfile);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to create space.");
+    }
   };
 
   const handleJoinSpace = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
-      await householdService.join(joinCode);
+      const updatedHousehold = await householdService.join(joinCode);
       setJoinCode("");
-      window.location.reload();
-    } catch (err: any) { setError(err.message); }
+
+      // ✅ REAL-TIME FIX: Smooth inline transition instead of layout window reload
+      setHousehold(updatedHousehold);
+      if (user) {
+        const freshUserProfile = { ...user, household: updatedHousehold };
+        localStorage.setItem("user", JSON.stringify(freshUserProfile));
+        setUser(freshUserProfile);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to join space.");
+    }
   };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await expenseService.create(expenseDesc, Number(expenseAmount));
-      setExpenseDesc(""); setExpenseAmount("");
-      const updated = await expenseService.getAll();
-      setExpenses(updated);
-    } catch (err: any) { setError(err.message); }
+      await expenseService.create({
+        description: expenseDesc,
+        amount: Number(expenseAmount)
+      });
+
+      setExpenseDesc("");
+      setExpenseAmount("");
+
+      const updatedList = await expenseService.getHouseholdExpenses();
+      setExpenses(Array.isArray(updatedList) ? updatedList : []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message);
+    }
   };
 
   const handleSettle = async (expenseId: string, userId: string) => {
     try {
       await expenseService.settle(expenseId, userId);
-      const updated = await expenseService.getAll();
-      setExpenses(updated);
-    } catch (err: any) { setError(err.message); }
+      const updatedList = await expenseService.getHouseholdExpenses();
+      setExpenses(Array.isArray(updatedList) ? updatedList : []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message);
+    }
   };
 
   const handleAddChore = async (e: React.FormEvent) => {
@@ -183,18 +253,14 @@ export default function Dashboard() {
 
     try {
       setIsCreatingTask(true);
-
-      // ✅ OPTIMIZED: The backend should return the updated chores list directly!
-      const updatedList = await choreService.create(choreTitle, choreAssignee);
-
-      // Update state instantly with the fresh array in one step
-      setChores(updatedList);
-
-      // Clear your input fields
+      await choreService.create(choreTitle, choreAssignee);
       setChoreTitle("");
       setChoreAssignee("");
+
+      const updatedList = await choreService.getAll();
+      setChores(Array.isArray(updatedList) ? updatedList : []);
     } catch (err: any) {
-      setChoreError(err.message);
+      setChoreError(err.response?.data?.message || err.message);
     } finally {
       setIsCreatingTask(false);
     }
@@ -205,9 +271,9 @@ export default function Dashboard() {
     try {
       await choreService.toggleStatus(choreId);
       const updated = await choreService.getAll();
-      setChores(updated);
+      setChores(Array.isArray(updated) ? updated : []);
     } catch (err: any) {
-      setChoreFeedError(err.message || "Unauthorized execution.");
+      setChoreFeedError(err.response?.data?.message || err.message || "Unauthorized execution.");
     }
   };
 
@@ -223,9 +289,14 @@ export default function Dashboard() {
       setHousehold(null);
       setExpenses([]);
       setChores([]);
-      window.location.reload();
+
+      if (user) {
+        const freshUserProfile = { ...user, household: null };
+        localStorage.setItem("user", JSON.stringify(freshUserProfile));
+        setUser(freshUserProfile);
+      }
     } catch (err: any) {
-      setError(err.message || "Failed to leave household.");
+      setError(err.response?.data?.message || err.message || "Failed to leave household.");
     }
   };
 
@@ -235,9 +306,18 @@ export default function Dashboard() {
       await householdService.transferOwnership(selectedTransferTarget);
       await householdService.leave();
       setShowAdminExitModal(false);
-      setHousehold(null); setExpenses([]); setChores([]);
-      window.location.reload();
-    } catch (err: any) { setError(err.message); }
+      setHousehold(null);
+      setExpenses([]);
+      setChores([]);
+
+      if (user) {
+        const freshUserProfile = { ...user, household: null };
+        localStorage.setItem("user", JSON.stringify(freshUserProfile));
+        setUser(freshUserProfile);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message);
+    }
   };
 
   const executeNuclearDelete = async () => {
@@ -247,10 +327,15 @@ export default function Dashboard() {
       setHousehold(null);
       setExpenses([]);
       setChores([]);
-      window.location.reload();
+
+      if (user) {
+        const freshUserProfile = { ...user, household: null };
+        localStorage.setItem("user", JSON.stringify(freshUserProfile));
+        setUser(freshUserProfile);
+      }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to dissolve room.");
+      setError(err.response?.data?.message || err.message || "Failed to dissolve room.");
       setShowDissolveModal(false);
     }
   };
@@ -261,14 +346,16 @@ export default function Dashboard() {
       await householdService.evictRoommate(roommateToEvict._id);
       setRoommateToEvict(null);
       fetchDashboardData();
-    } catch (err: any) { setError(err.message); setRoommateToEvict(null); }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message);
+      setRoommateToEvict(null);
+    }
   };
 
-
-
+  // Data processing memo streams
   // Data processing memo streams
   const expenseChartData = useMemo(() => {
-    if (!household || !expenses) return [];
+    if (!household || !household.members || !expenses) return [];
     return household.members.map((member: any) => {
       let actualPaid = 0;
       expenses.forEach((exp: any) => {
@@ -282,6 +369,7 @@ export default function Dashboard() {
 
       const netPaid = Number(actualPaid.toFixed(2));
       return {
+        id: member._id, // 🚀 FIXED: Pass the unique member ID down to the chart items
         name: member.name === user?.name ? "You" : member.name,
         "Net Paid": netPaid,
         fill: netPaid >= 0 ? "url(#posGradient)" : "url(#negGradient)"
@@ -306,11 +394,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen font-sans flex flex-col relative overflow-clip text-slate-900">
-
-
-      {/* STICKY NAVBAR */}
-
-
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-20 w-full z-10">
         {error && <div className="mb-8 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center font-bold text-sm">{error}</div>}
 
@@ -392,28 +475,46 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="h-64 w-full min-w-0">
-                  {/* ✅ FIXED: Provided numeric height to bypass Recharts layout computing logic entirely */}
-                  {household?._id && (
+                  {household?._id && expenseChartData.length > 0 && (
                     <ResponsiveContainer width="100%" height={250} minWidth={0}>
+                      {/* 1. We attach the stable 'id' key property as our main chart entry index */}
                       <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                         <defs>
-                          <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" /><stop offset="100%" stopColor="#059669" /></linearGradient>
-                          <linearGradient id="negGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" /><stop offset="100%" stopColor="#e11d48" /></linearGradient>
+                          <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" />
+                            <stop offset="100%" stopColor="#059669" />
+                          </linearGradient>
+                          <linearGradient id="negGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#f43f5e" />
+                            <stop offset="100%" stopColor="#e11d48" />
+                          </linearGradient>
                         </defs>
+
+                        {/* XAxis reads the display name ("You", "Roommate name") */}
                         <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tick={{ fontWeight: 800, fill: '#64748b' }} dy={10} />
                         <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} tick={{ fontWeight: 800, fill: '#64748b' }} />
+
                         <Tooltip content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const val = Number(payload[0].value);
                             return (
                               <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans">
                                 <p className="text-xs font-bold text-slate-400 mb-1">{payload[0].payload.name}</p>
-                                <p className="text-lg font-black"><span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>{val >= 0 ? `Owed: +₹${val}` : `Owes: -₹${Math.abs(val)}`}</span></p>
+                                <p className="text-lg font-black">
+                                  <span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                                    {val >= 0 ? `Owed: +₹${val}` : `Owes: -₹${Math.abs(val)}`}
+                                  </span>
+                                </p>
                               </div>
                             );
                           } return null;
                         }} />
-                        <Bar dataKey="Net Paid" radius={[10, 10, 10, 10]} />
+
+                        {/* 2. ✅ FIXED: dataKey points to the currency value, while key points to the item's custom unique database id */}
+                        <Bar
+                          dataKey="Net Paid"
+                          radius={[10, 10, 10, 10]}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -426,21 +527,30 @@ export default function Dashboard() {
                   <h2 className="text-2xl font-black tracking-tight">Chore Productivity</h2>
                 </div>
                 <div className="h-64 w-full relative min-w-0">
-
-                  {household?._id && (
-                    <ResponsiveContainer width="100%" height={250} minWidth={0}>
-                      <PieChart>
-                        <Pie data={choreChartData} innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value" stroke="none" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                  {household?._id && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-4xl font-black text-slate-900">{chores.length}</span>
-                      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
-                    </div>
-                  )}
-                </div>
+  {household?._id && (
+    <ResponsiveContainer width="100%" height={250} minWidth={0}>
+      <PieChart>
+        <Pie 
+          data={choreChartData} 
+          innerRadius={70} 
+          outerRadius={100} 
+          paddingAngle={5} 
+          dataKey="value" 
+          nameKey="name" // ✨ NEW: Tells Recharts to use "Completed"/"Pending" as unique item keys safely
+          stroke="none"
+          // Modern Recharts automatically picks up the "fill" property inside 
+          // your choreChartData array items to style each sector!
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  )}
+  {household?._id && (
+    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <span className="text-4xl font-black text-slate-900">{chores.length}</span>
+      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
+    </div>
+  )}
+</div>
               </motion.div>
             </div>
 
@@ -455,6 +565,7 @@ export default function Dashboard() {
                     <button type="submit" className="w-full h-14 rounded-2xl bg-slate-900 text-white font-bold text-lg flex items-center justify-center shadow-lg cursor-pointer"><Plus size={20} className="mr-2" />Split Bill</button>
                   </form>
                 </motion.div>
+
                 <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass + " !overflow-visible relative z-50"}>
                   <h2 className="text-xl font-black mb-6">Assign Task</h2>
                   <form onSubmit={handleAddChore} className="space-y-4">
@@ -466,7 +577,6 @@ export default function Dashboard() {
                       className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold px-5"
                     />
 
-                    {/* ✨ RESTORED: Your original gorgeous custom selection trigger frame */}
                     <div className="relative z-50">
                       <div
                         onClick={() => setIsChoreDropdownOpen(!isChoreDropdownOpen)}
@@ -488,23 +598,19 @@ export default function Dashboard() {
                         </motion.div>
                       </div>
 
-                      {/* ✨ OVERLAY LIST: Your premium list wrapper now engineered with breakout z-indexing */}
-                      {/* ✨ OVERLAY LIST: Cap the height and enable scrolling */}
-                      {/* 1. THE DROPDOWN LIST (Controlled by isChoreDropdownOpen) */}
                       <AnimatePresence>
                         {isChoreDropdownOpen && (
                           <>
                             <div className="fixed inset-0 z-[60]" onClick={() => setIsChoreDropdownOpen(false)} />
-
                             <motion.div
                               initial={{ opacity: 0, y: -10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: -10, scale: 0.95 }}
                               className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-2xl rounded-2xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] max-h-48 overflow-y-auto z-[70] scrollbar-thin scrollbar-thumb-slate-200"
                             >
-                              {household.members?.map((member: any) => (
+                              {household.members?.map((member: any, index: number) => (
                                 <div
-                                  key={member._id}
+                                 key={member._id || `assign-${index}`}
                                   onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }}
                                   className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-all ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
                                     }`}
@@ -518,7 +624,6 @@ export default function Dashboard() {
                         )}
                       </AnimatePresence>
 
-                      {/* 2. THE ERROR BOX BELOW (Controlled by choreError) */}
                       <AnimatePresence>
                         {choreError && (
                           <motion.div
@@ -538,18 +643,19 @@ export default function Dashboard() {
                     </button>
                   </form>
                 </motion.div>
+
                 {isAdmin && (
                   <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                     <h2 className="text-xl font-black mb-4 flex items-center gap-2"><Users size={20} /> Residents List</h2>
                     <div className="space-y-3">
-                      {household.members?.map((m: any) => (
-                        <div key={m._id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-transparent">
+                      {household.members?.map((m: any,index:number) => (
+                        <div key={m._id || `resident-${index}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-transparent">
                           <div className="flex items-center gap-3">
                             <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-8 h-8 rounded-lg bg-white shadow-sm" alt="avatar" />
                             <span className="text-sm font-bold text-slate-700">{m.name} {m._id === user._id && "(You)"}</span>
                           </div>
                           {m._id !== user._id && (
-                            <button onClick={() => setRoommateToEvict(m)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"><Trash2 size={14} /></button>
+                            <button type="button" onClick={() => setRoommateToEvict(m)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"><Trash2 size={14} /></button>
                           )}
                         </div>
                       ))}
@@ -562,8 +668,6 @@ export default function Dashboard() {
                 <motion.div variants={slideUp} className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-black flex items-center gap-2"><Activity className="text-indigo-500" /> Recent Activity</h2>
-
-                    {/* Page Badge Indicator */}
                     {expenses.length > itemsPerPage && (
                       <span className="text-xs font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
                         Page {expensePage} of {Math.ceil(expenses.length / itemsPerPage)}
@@ -575,7 +679,6 @@ export default function Dashboard() {
                       <div className={glassCardClass + " text-center py-8 text-slate-400 font-bold text-sm"}>No recent bills logged.</div>
                     ) : (
                       expenses
-                        // Slices the active array bucket context natively based on current page
                         .slice((expensePage - 1) * itemsPerPage, expensePage * itemsPerPage)
                         .map((expense: any) => (
                           <motion.div key={expense._id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} whileHover={hoverCard} className={glassCardClass + " !p-6"}>
@@ -587,7 +690,7 @@ export default function Dashboard() {
                                   <p className="text-sm font-bold text-slate-500">Paid by {expense.paidBy?.name === user.name ? "You" : expense.paidBy?.name}</p>
                                 </div>
                               </div>
-                              <span className="font-black text-2xl">₹{expense.amount.toFixed(2)}</span>
+                              <span className="font-black text-2xl">₹{expense.amount?.toFixed(2)}</span>
                             </div>
                             <div className="bg-slate-50 rounded-2xl p-2 space-y-1">
                               {expense.splits?.map((split: any, idx: number) => {
@@ -608,11 +711,10 @@ export default function Dashboard() {
                     )}
                   </AnimatePresence>
 
-                  {/* Expense Pagination Controls row layout */}
-                  {/* Polished Recent Activity Pagination Controls */}
                   {expenses.length > itemsPerPage && (
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100/60 mt-4">
                       <button
+                        type="button"
                         disabled={expensePage === 1}
                         onClick={() => setExpensePage(prev => Math.max(prev - 1, 1))}
                         className="px-5 py-2.5 text-xs font-black text-slate-700 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
@@ -620,6 +722,7 @@ export default function Dashboard() {
                         ← Prev
                       </button>
                       <button
+                        type="button"
                         disabled={expensePage >= Math.ceil(expenses.length / itemsPerPage)}
                         onClick={() => setExpensePage(prev => prev + 1)}
                         className="px-5 py-2.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
@@ -630,7 +733,7 @@ export default function Dashboard() {
                   )}
                 </motion.div>
 
-                {/* --- PENDING TASKS COLOUR BLOCK LAYER --- */}
+                {/* --- PENDING TASKS LAYOUT --- */}
                 <motion.div variants={slideUp} className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-black flex items-center gap-2">
@@ -644,7 +747,6 @@ export default function Dashboard() {
                   </div>
                   <AnimatePresence mode="popLayout">
                     {choreFeedError && (
-
                       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="p-4 bg-amber-50 text-amber-700 font-bold text-sm rounded-2xl text-center">
                         ⚠️ {choreFeedError}
                       </motion.div>
@@ -667,12 +769,11 @@ export default function Dashboard() {
                         <div className={glassCardClass + " text-center py-8 text-slate-400 font-bold text-sm"}>No pending tasks for your room! 🎉</div>
                       ) : (
                         chores
-                          // Filters only pending items first, then slices current window bounds
                           .filter((c: any) => !c.isCompleted)
                           .slice((chorePage - 1) * itemsPerPage, chorePage * itemsPerPage)
                           .map((chore: any) => (
                             <motion.div key={chore._id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} whileHover={hoverCard} className={glassCardClass + " !p-5 flex items-center gap-5"}>
-                              <button onClick={() => handleToggleChore(chore._id)} className="h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 border-slate-300 bg-slate-50 hover:border-emerald-400 cursor-pointer">
+                              <button type="button" onClick={() => handleToggleChore(chore._id)} className="h-12 w-12 rounded-2xl border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 border-slate-300 bg-slate-50 hover:border-emerald-400 cursor-pointer">
                                 {chore.isCompleted && <CheckCircle2 className="text-white" size={28} />}
                               </button>
                               <div>
@@ -686,11 +787,12 @@ export default function Dashboard() {
                           ))
                       )}
                     </AnimatePresence>
-                  </div>{/* Chore Pagination Controls row layout */}
-                  {/* Polished Pending Tasks Pagination Controls */}
+                  </div>
+
                   {chores.filter(c => !c.isCompleted).length > itemsPerPage && (
                     <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100/60 mt-4">
                       <button
+                        type="button"
                         disabled={chorePage === 1}
                         onClick={() => setChorePage(prev => Math.max(prev - 1, 1))}
                         className="px-5 py-2.5 text-xs font-black text-slate-700 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
@@ -698,6 +800,7 @@ export default function Dashboard() {
                         ← Prev
                       </button>
                       <button
+                        type="button"
                         disabled={chorePage >= Math.ceil(chores.filter(c => !c.isCompleted).length / itemsPerPage)}
                         onClick={() => setChorePage(prev => prev + 1)}
                         className="px-5 py-2.5 text-xs font-black text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 transition-all duration-200 disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer flex items-center gap-1 select-none"
@@ -706,15 +809,12 @@ export default function Dashboard() {
                       </button>
                     </div>
                   )}
-
                 </motion.div>
               </div>
             </div>
           </motion.div>
         )}
       </main>
-
-
 
       {/* STANDARD EXIT MODAL */}
       <AnimatePresence>
@@ -726,8 +826,8 @@ export default function Dashboard() {
               <h3 className="text-2xl font-black mb-2">Leave Apartment?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8">Are you sure you want to exit? Your dashboard access will close instantly.</p>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setIsLeaveModalOpen(false)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Nevermind</button>
-                <button onClick={executeStandardLeave} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Leave</button>
+                <button type="button" onClick={() => setIsLeaveModalOpen(false)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Nevermind</button>
+                <button type="button" onClick={executeStandardLeave} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Leave</button>
               </div>
             </motion.div>
           </div>
@@ -746,8 +846,8 @@ export default function Dashboard() {
               <h3 className="text-2xl font-black mb-2">Remove Resident?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed">Are you absolutely certain you want to remove <span className="text-rose-600 font-black">{roommateToEvict.name}</span> from this apartment group?</p>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setRoommateToEvict(null)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel</button>
-                <button onClick={handleEvictRoommate} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Remove</button>
+                <button type="button" onClick={() => setRoommateToEvict(null)} className="h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel</button>
+                <button type="button" onClick={handleEvictRoommate} className="h-14 rounded-2xl bg-rose-600 text-white font-bold cursor-pointer">Yes, Remove</button>
               </div>
             </motion.div>
           </div>
@@ -780,8 +880,8 @@ export default function Dashboard() {
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setIsAdminDropdownOpen(false)} />
                           <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute z-50 left-0 right-0 mt-1.5 bg-white border rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                            {household.members?.filter((m: any) => m._id !== user?._id).map((member: any) => (
-                              <div key={member._id} onClick={() => { setSelectedTransferTarget(member._id); setIsAdminDropdownOpen(false); }} className={`flex items-center gap-2.5 px-4 py-2.5 font-bold cursor-pointer text-sm ${selectedTransferTarget === member._id ? "bg-amber-50 text-amber-700" : "hover:bg-slate-50"}`}>
+                            {household.members?.filter((m: any) => m._id !== user?._id).map((member: any, index : number) => (
+                              <div key={member._id || `assign-${index}`} onClick={() => { setSelectedTransferTarget(member._id); setIsAdminDropdownOpen(false); }} className={`flex items-center gap-2.5 px-4 py-2.5 font-bold cursor-pointer text-sm ${selectedTransferTarget === member._id ? "bg-amber-50 text-amber-700" : "hover:bg-slate-50"}`}>
                                 <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-6 h-6 rounded-full bg-slate-100" alt="avatar" />
                                 <span>{member.name}</span>
                               </div>
@@ -791,14 +891,14 @@ export default function Dashboard() {
                       )}
                     </AnimatePresence>
                   </div>
-                  <button disabled={!selectedTransferTarget} onClick={executeTransferAndLeave} className="w-full h-11 bg-slate-900 text-white text-sm font-bold rounded-xl disabled:bg-slate-200 cursor-pointer">Assign & Resign</button>
+                  <button type="button" disabled={!selectedTransferTarget} onClick={executeTransferAndLeave} className="w-full h-11 bg-slate-900 text-white text-sm font-bold rounded-xl disabled:bg-slate-200 cursor-pointer">Assign & Resign</button>
                 </div>
                 <div className="relative flex py-2 items-center text-slate-300">
                   <div className="flex-grow border-t"></div> <span className="mx-4 text-xs font-black uppercase text-slate-400">Or</span> <div className="flex-grow border-t"></div>
                 </div>
                 <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
                   <label className="block text-xs font-black uppercase text-rose-500 mb-1">Option B: Dissolve Room</label>
-                  <button onClick={() => { setShowAdminExitModal(false); setShowDissolveModal(true); }} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-rose-600/10 cursor-pointer">Delete Room for Everyone</button>
+                  <button type="button" onClick={() => { setShowAdminExitModal(false); setShowDissolveModal(true); }} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-rose-600/10 cursor-pointer">Delete Room for Everyone</button>
                 </div>
               </div>
             </motion.div>
@@ -816,15 +916,13 @@ export default function Dashboard() {
               <h3 className="text-3xl font-black tracking-tighter mb-3">Dissolve Apartment?</h3>
               <p className="text-slate-500 font-bold text-sm mb-8 leading-relaxed">This action is permanent. All chore tracking charts, balance splits, and historical data logs will be completely wiped from the cloud infrastructure.</p>
               <div className="space-y-3">
-                <button onClick={executeNuclearDelete} className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-lg shadow-lg cursor-pointer">Yes, Dissolve Space</button>
-                <button onClick={() => setShowDissolveModal(false)} className="w-full h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel, Keep Active</button>
+                <button type="button" onClick={executeNuclearDelete} className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-lg shadow-lg cursor-pointer">Yes, Dissolve Space</button>
+                <button type="button" onClick={() => setShowDissolveModal(false)} className="w-full h-14 rounded-2xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Cancel, Keep Active</button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
-
     </div>
   );
 }

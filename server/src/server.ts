@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import http from "http"; // ✅ Import native HTTP module
 import { initSocket } from "./socket"; // ✅ Import your new socket manager
+import rateLimit from "express-rate-limit";
 
 // Import Routes
 import authRoutes from "./routes/authRoutes";
@@ -28,14 +29,26 @@ const server = http.createServer(app)
 app.use(cors());
 app.use(express.json());
 
+// =========================================================
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes window duration
+  max: 20, // Strict maximum limit: 20 authentication attempts per window window
+  message: {
+    message: "Too many login/registration attempts from this IP. Please try again after 15 minutes."
+  },
+  standardHeaders: true, // Return standard rate limit info headers
+  legacyHeaders: false, // Disable X-RateLimit-* legacy headers
+});
+
+// Apply the strict guard middleware exclusively to authentication route routes
+app.use("/api/auth", authLimiter);
+// =========================================================
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/households", householdRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/chores", choreRoutes);
-app.use("/api/households", householdRoutes);
-app.use("/api/chores", choreRoutes);
-app.use("/api/expenses", expenseRoutes);
 
 app.use("/api/events", eventRoutes);
 app.use("/api/reports", reportRoutes);

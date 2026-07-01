@@ -93,6 +93,11 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
     const { choreId } = req.params;
     const userId = req.user?._id;
 
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized. User ID not found." });
+      return;
+    }
+
     const chore = await Chore.findById(choreId);
 
     if (!chore) {
@@ -101,24 +106,27 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
     }
 
     // --- ACCOUNTABILITY GUARD LAYER ---
-    // Safety check to ensure userId exists from the token
-    if (!userId) {
-      res.status(401).json({ message: "Unauthorized. User ID not found." });
-      return;
-    }
-
-    // Compare the assigned roommate's ID to the logged-in user's ID
+    // 1. Compare the assigned roommate's ID to the logged-in user's ID
     if (chore.assignedTo.toString() !== userId.toString()) {
       res.status(403).json({ message: "You can only mark your own assigned tasks as completed!" });
       return;
     }
-    // ---------------------------------------
+
+    // =========================================================================
+    // 🛡️ TENANT ISOLATION FIX: Verify user still belongs to this chore's room
+    // =========================================================================
+    // Check if the user's current household field matches the chore's household field
+    if (!req.user?.household || req.user.household.toString() !== chore.household.toString()) {
+      res.status(403).json({ message: "Access denied. You no longer belong to this household apartment." });
+      return;
+    }
+    // =========================================================================
 
     // Flip the boolean value (if true -> false, if false -> true)
     chore.isCompleted = !chore.isCompleted;
     await chore.save();
 
-    // ✅ FIXED: Using the 'household' ID attached directly to the 'chore' document itself
+    // ✅ Retained your exact Socket.io update event logic
     if (chore.household) {
       getIO().to(chore.household.toString()).emit("chores_data_changed");
     }

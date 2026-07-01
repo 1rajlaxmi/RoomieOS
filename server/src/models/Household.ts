@@ -11,7 +11,12 @@ export interface IHousehold extends Document {
 // 2. THE MONGOOSE SCHEMA
 const HouseholdSchema: Schema = new Schema(
   {
-    name: { type: String, required: true },
+    name: {
+       type: String, 
+       required: true,
+       trim: true,
+       maxlength: [50, "Household name cannot exceed 50 characters."] // 🛡️ GUARD AGAINST LENGTH OVERFLOW
+    }, 
     inviteCode: { type: String, required: true, unique: true },
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
     owner: { type: Schema.Types.ObjectId, ref: "User", required: true } // Keeps MongoDB aligned

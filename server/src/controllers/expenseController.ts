@@ -4,6 +4,7 @@ import Household from "../models/Household";
 import { AuthRequest } from "../middleware/authMiddleware";
 import sendEmail from "../utils/sendEmail";
 import { getIO } from "../socket";
+import { Types } from "mongoose";
 import User from "../models/User"; // We need this to get your roommates' email addresses
 
 // @desc    Add a new expense and split it equally
@@ -12,6 +13,12 @@ import User from "../models/User"; // We need this to get your roommates' email 
 export const addExpense = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { description, amount } = req.body;
+
+    const parsedAmount = Number(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      res.status(400).json({ message: "Amount must be a valid positive number." });
+      return;
+    }
 
     // 1. Find the household the current user belongs to
     const household = await Household.findOne({ members: req.user?._id });
@@ -23,54 +30,59 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
 
     // 2. The Math: Divide the amount by the number of roommates
     const totalMembers = household.members.length;
-    const splitAmount = amount / totalMembers;
+    const splitAmount = parsedAmount / totalMembers; // ✅ FIXED: Using parsedAmount consistently
 
     // 3. Create the splits array
     const splits = household.members.map((memberId) => {
-      // We convert Mongoose ObjectIDs to strings to safely compare them
       const isPayer = memberId.toString() === req.user?._id.toString();
       
       return {
         user: memberId,
-        amountOwed: Number(splitAmount.toFixed(2)), // Round to 2 decimal places for currency
-        isPaid: isPayer // The person who paid instantly has their share marked as paid
+        amountOwed: Number(splitAmount.toFixed(2)), 
+        isPaid: isPayer 
       };
     });
 
     // 4. Save the expense to the database
     const expense = await Expense.create({
       description,
-      amount: Number(amount),
+      amount: parsedAmount, // ✅ FIXED: Using parsedAmount consistently
       paidBy: req.user?._id as any,
       household: household._id as any,
       splits
     });
     
     // --- SEND AUTOMATED EMAILS ---
-    // Fetch all members of the household so we can get their email addresses
     const populatedHousehold = await Household.findById(household._id).populate("members", "name email");
     
     if (populatedHousehold) {
-      populatedHousehold.members.forEach(async (member: any) => {
-        // Only email the OTHER roommates, not the person who just paid
+      // ✅ FIXED: Map email delivery promises to resolve them deterministically
+      const emailPromises = populatedHousehold.members.map(async (member: any) => {
         if (member._id.toString() !== req.user?._id.toString()) {
-          await sendEmail({
-            to: member.email,
-            subject: `[RoomieOS] New Expense: ${expense.description}`,
-            title: "💸 Bill Split Alert",
-            body: `A new bill for "${expense.description}" totaling $${expense.amount.toFixed(2)} was just added. Your split has been calculated and is ready for review.`,
-            ctaText: "View Dashboard",
-            ctaLink: "http://localhost:5173" 
-          });
+          try {
+            await sendEmail({
+              to: member.email,
+              subject: `[RoomieOS] New Expense: ${expense.description}`,
+              title: "💸 Bill Split Alert",
+              body: `A new bill for "${expense.description}" totaling ₹${expense.amount.toFixed(2)} was just added. Your split has been calculated and is ready for review.`,
+              ctaText: "View Dashboard",
+              ctaLink: "http://localhost:5173" 
+            });
+          } catch (emailErr) {
+            // Logs mail transport dropouts without breaking the database transaction or crashing server
+            console.error(`[Mail Fail] Failed to notify ${member.email}:`, emailErr);
+          }
         }
       });
+
+      // Wait until all mapped operations conclude entirely before returning
+      await Promise.all(emailPromises);
     }
 
-    // ✅ FIXED: Using the local 'household' variable fetched at the top of this function
+    // ✅ Retained exact original Socket.io sync call
     if (household) {
       getIO().to(household._id.toString()).emit("expenses_data_changed");
     }
-    // ----------------------------------
     
     res.status(201).json(expense);
   } catch (error) {
@@ -111,6 +123,15 @@ export const settleExpense = async (req: AuthRequest, res: Response): Promise<vo
     const { expenseId } = req.params;
     const { userId } = req.body; // The ID of the roommate who paid their debt
 
+    // =========================================================
+    // 🛡️ SECURITY GUARD: Sanitize input to prevent CastError/ID spoofing
+    // =========================================================
+    if (!userId || typeof userId !== "string" || !Types.ObjectId.isValid(userId)) {
+      res.status(400).json({ message: "Invalid user ID format provided for settlement." });
+      return;
+    }
+    // =========================================================
+
     const expense = await Expense.findById(expenseId);
 
     if (!expense) {
@@ -118,7 +139,7 @@ export const settleExpense = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // SECURITY CHECK: Only the person who originally paid the bill can mark it as settled
+    // SECURITY CHECK: Retained exact original check ensuring only the creator/payer marks it settled
     if (expense.paidBy.toString() !== req.user?._id.toString()) {
       res.status(403).json({ message: "Only the person who paid the bill can settle this debt." });
       return;
@@ -134,7 +155,7 @@ export const settleExpense = async (req: AuthRequest, res: Response): Promise<vo
       expense.splits[splitIndex].isPaid = true;
       await expense.save();
 
-      // ✅ FIXED: Using the 'household' field attached directly to the 'expense' document
+      // ✅ Retained exact original Socket.io real-time channel broadcast
       if (expense.household) {
         getIO().to(expense.household.toString()).emit("expenses_data_changed");
       }

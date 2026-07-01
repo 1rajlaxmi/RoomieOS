@@ -51,7 +51,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegister = async (e: React.FormEvent) => {
+ const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -70,10 +70,16 @@ export default function Register() {
       localStorage.setItem("user", JSON.stringify(userObj));
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Registration failed. Please try again.");
+      // =========================================================================
+      // 🛡️ FRONTEND ERROR CAPTURE FIX: Read structural JSON message strings from the API
+      // =========================================================================
+      const backendMessage = err.response?.data?.message;
+      
+      setError(backendMessage || err.message || "Registration failed. Please try again.");
+      // =========================================================================
     }
   };
-
+  
   return (
     <div className="min-h-screen flex items-center justify-center p-4 font-sans text-slate-900 relative">
       <AuthBackground />

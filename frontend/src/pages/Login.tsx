@@ -44,7 +44,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+ const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -63,10 +63,15 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(userObj));
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Invalid credentials. Please try again.");
+      // =========================================================================
+      // 🛡️ FRONTEND ERROR CAPTURE FIX: Read structural JSON message strings from the API
+      // =========================================================================
+      const backendMessage = err.response?.data?.message;
+      
+      setError(backendMessage || err.message || "Invalid credentials. Please try again.");
+      // =========================================================================
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 font-sans text-slate-900 relative">
       <AuthBackground />
