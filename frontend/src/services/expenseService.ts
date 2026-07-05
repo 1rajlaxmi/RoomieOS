@@ -1,21 +1,38 @@
-import axios from "axios";
+// 🚀 Switch from raw axios to your centralized API utility client wrapper
+import { apiRequest } from "./api"; 
 
 export const expenseService = {
-  // Creates a new expense
+  // 1. CREATE A NEW EXPENSE / SPLIT BILL
   create: async (expenseData: { description: string; amount: number }) => {
-    const response = await axios.post("/api/expenses", expenseData);
-    return response.data;
+    try {
+      // Automatically forwards JWT headers and routes to your backend server port
+      return await apiRequest("/expenses", {
+        method: "POST",
+        body: JSON.stringify(expenseData)
+      });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to split household bill.");
+    }
   },
 
-  // Fetches household expenses (Make sure this name matches!)
+  // 2. FETCH HOUSEHOLD EXPENSES
   getHouseholdExpenses: async () => {
-    const response = await axios.get("/api/expenses");
-    return response.data;
+    try {
+      return await apiRequest("/expenses", { method: "GET" });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to pull balance ledger sheet.");
+    }
   },
 
-  // Accepts two separate parameters to pass one to URL and one to body
+  // 3. SETTLE BALANCES BETWEEN ROOMMATES
   settle: async (expenseId: string, userId: string) => {
-    const response = await axios.put(`/api/expenses/${expenseId}/settle`, { userId });
-    return response.data;
+    try {
+      return await apiRequest(`/expenses/${expenseId}/settle`, {
+        method: "PUT",
+        body: JSON.stringify({ userId })
+      });
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to settle roommate balance.");
+    }
   }
 };
