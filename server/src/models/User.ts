@@ -9,6 +9,10 @@ export interface IUser extends Document {
   comparePassword(candidatePassword: string): Promise<boolean>;
 
   household?: mongoose.Types.ObjectId | string | null;
+  
+  // ✅ NEW: Optional verification properties for safe password resets
+  resetPasswordToken?: string | null;
+  resetPasswordExpires?: Date | null;
 }
 
 // 2. Mongoose Schema
@@ -17,7 +21,11 @@ const UserSchema: Schema = new Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
-    household: { type: Schema.Types.ObjectId, ref: "Household", default: null }
+    household: { type: Schema.Types.ObjectId, ref: "Household", default: null },
+    
+    // ✅ NEW: Isolated reset tracking allocations
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null }
   },
   { timestamps: true } // Automatically adds createdAt and updatedAt
 );
@@ -30,6 +38,7 @@ UserSchema.pre("save", async function (this: IUser) {
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
+
 // 4. Method to compare passwords during login
 UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   return await bcrypt.compare(candidatePassword, this.password);

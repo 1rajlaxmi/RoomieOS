@@ -44,7 +44,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
- const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -52,7 +52,7 @@ export default function Login() {
       const data = await authService.login({ email, password });
       
       const token = data.token;
-      const userObj = data.user || data; // Prevents flat vs nested JSON redirect loops
+      const userObj = data.user || data; 
 
       if (!token) {
         setError("Authentication succeeded, but no security token was returned.");
@@ -63,15 +63,11 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(userObj));
       navigate("/dashboard");
     } catch (err: any) {
-      // =========================================================================
-      // 🛡️ FRONTEND ERROR CAPTURE FIX: Read structural JSON message strings from the API
-      // =========================================================================
       const backendMessage = err.response?.data?.message;
-      
       setError(backendMessage || err.message || "Invalid credentials. Please try again.");
-      // =========================================================================
     }
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 font-sans text-slate-900 relative">
       <AuthBackground />
@@ -141,6 +137,16 @@ export default function Login() {
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
+          </motion.div>
+
+          {/* ✅ NEW: Interactive Forgot Password trigger link */}
+          <motion.div variants={itemVariants} className="flex justify-end px-1">
+            <Link 
+              to="/forgot-password" 
+              className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors tracking-tight underline decoration-1 underline-offset-4"
+            >
+              Forgot Password?
+            </Link>
           </motion.div>
 
           <div className="pt-2">

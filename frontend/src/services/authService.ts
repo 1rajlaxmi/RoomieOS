@@ -13,5 +13,19 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(userData),
     });
+  },
+
+  forgotPassword: async (email: string) => {
+    return await apiRequest("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    });
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    return await apiRequest(`/auth/reset-password/${token}`, {
+      method: "PUT",
+      body: JSON.stringify({ password })
+    });
   }
 };
