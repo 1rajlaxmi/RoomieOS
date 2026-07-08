@@ -11,16 +11,10 @@ import { Types } from "mongoose";
 
 // Helper function to generate a random 6-character alphanumeric code
 const generateInviteCode = (): string => {
-  // 1. Generate 3 random secure bytes (e.g., [164, 42, 211])
   const bytes = crypto.randomBytes(3);
-  
-  // 2. Convert those bytes into a clean, 6-character hex string (e.g., "a422d3")
   const hexCode = bytes.toString("hex");
-  
-  // 3. Return it in uppercase for easy user reading/typing ("A422D3")
   return hexCode.toUpperCase();
 };
-
 
 // @desc    Create a new household
 // @route   POST /api/households/create
@@ -35,7 +29,6 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 🛡️ SECURITY GUARD: Check if the user is already linked to any household
     const existingHousehold = await Household.findOne({ members: userId });
     if (existingHousehold) {
       res.status(400).json({ 
@@ -55,10 +48,11 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
 
     await newHousehold.save();
     
-    // Bind the household ID back to the user object
     await User.findByIdAndUpdate(userId, { household: newHousehold._id });
 
-    // --- ADMIN ROOM CREATION WELCOME EMAIL SYSTEM ---
+    // ✅ FIXED: Populate members right away so the frontend immediately receives user names upon creation context initialization
+    const populatedHousehold = await Household.findById(newHousehold._id).populate("members", "name email");
+
     if (req.user?.email) {
       await sendEmail({
         to: req.user.email,
@@ -70,7 +64,7 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
       });
     }
 
-    res.status(201).json(newHousehold);
+    res.status(201).json(populatedHousehold);
   } catch (error) {
     res.status(500).json({ message: "Server error setting up household.", error });
   }
@@ -89,7 +83,6 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // 🛡️ SECURITY GUARD: Block entry if this roommate is already nested inside an active room
     const currentHousehold = await Household.findOne({ members: userId });
     if (currentHousehold) {
       res.status(400).json({ 
@@ -105,19 +98,19 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Update the household members list in the database
     await Household.updateOne(
       { _id: household._id },
       { $addToSet: { members: userId } }
     );
 
-    // Link the household to the newcomer's profile
     await User.findByIdAndUpdate(userId, { household: household._id });
 
-    // Trigger live UI updates across active browsers
+    // ✅ FIXED: Fetch the freshly updated household array complete with full populated user details 
+    // to prevent blank dropdown fields when navigating directly to dashboard
+    const populatedJoinedHousehold = await Household.findById(household._id).populate("members", "name email");
+
     getIO().to(household._id.toString()).emit("household_data_changed");
 
-    // --- REAL-TIME WELCOME & ALERTER EMAIL SYSTEM ---
     if (req.user?.email) {
       await sendEmail({
         to: req.user.email,
@@ -148,7 +141,7 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
       }
     }
 
-    res.status(200).json(household);
+    res.status(200).json(populatedJoinedHousehold);
   } catch (error) {
     res.status(500).json({ message: "Server error joining household", error });
   }
@@ -163,7 +156,6 @@ export const getMyHousehold = async (req: AuthRequest, res: Response): Promise<v
       .populate("members", "name email"); 
 
     if (!household) {
-      // ✅ CHANGED: Return 200 OK with null instead of a 404 error
       res.status(200).json(null);
       return;
     }
@@ -193,7 +185,6 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 🛡️ ACCOUNTABILITY GUARD 1: Check for incomplete chores assigned to this user
     const pendingChores = await Chore.countDocuments({
       household: household._id,
       assignedTo: userId,
@@ -207,8 +198,6 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 🛡️ ACCOUNTABILITY GUARD 2: Check for unpaid bill splits linked to this user
-    // We look for expenses in this house where the user is listed in a split and 'isPaid' is false
     const unpaidExpenses = await Expense.countDocuments({
       household: household._id,
       splits: {
@@ -226,16 +215,13 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // ✅ CLEAN TO EXIT: If the code reaches here, the user owes nothing and has completed all tasks
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: userId } }
     );
 
-    // Unlink the household from the user profile safely
     await User.findByIdAndUpdate(userId, { $unset: { household: "" } });
 
-    // Emit signal so remaining roommates instantly see the user list update live
     getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Successfully left the household." });
@@ -256,7 +242,6 @@ export const deleteHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Retained exact original schema field: 'owner'
     const household = await Household.findOne({ owner: userId });
 
     if (!household) {
@@ -264,17 +249,11 @@ export const deleteHousehold = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // ✅ Retained exact existing Socket.io real-time kick behavior
     getIO().to(household._id.toString()).emit("household_data_changed");
 
-    // =========================================================
-    // 🛡️ TESTING AI FIX: Cascading Deletes (Injected Safely Here)
-    // =========================================================
     await Chore.deleteMany({ household: household._id });
     await Expense.deleteMany({ household: household._id });
-    // =========================================================
 
-    // Retained exact original membership decoupling and deletion steps
     await User.updateMany({ _id: { $in: household.members } }, { $unset: { household: "" } });
     await Household.findByIdAndDelete(household._id);
 
@@ -297,14 +276,10 @@ export const removeRoommate = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // =========================================================
-    // 🛡️ SECURITY GUARD: Intercept malformed strings to prevent 500 CastError
-    // =========================================================
     if (!memberId || typeof memberId !== "string" || !Types.ObjectId.isValid(memberId)) {
       res.status(400).json({ message: "Invalid roommate ID format." });
       return;
     }
-    // =========================================================
 
     const household = await Household.findOne({ owner: userId });
     if (!household) {
@@ -317,7 +292,6 @@ export const removeRoommate = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // 100% Retained exact MongoDB operations
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: memberId } }
@@ -325,7 +299,6 @@ export const removeRoommate = async (req: AuthRequest, res: Response): Promise<v
 
     await User.findByIdAndUpdate(memberId, { $unset: { household: "" } });
     
-    // 100% Retained existing Socket.io real-time broadcast signal
     getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Roommate successfully evicted." });
@@ -347,9 +320,6 @@ export const transferOwnership = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // =========================================================
-    // 🛡️ SECURITY GUARD: Sanitize incoming input & confirm database record exists
-    // =========================================================
     if (!newOwnerId || !Types.ObjectId.isValid(newOwnerId)) {
       res.status(400).json({ message: "Invalid new owner ID format." });
       return;
@@ -360,7 +330,6 @@ export const transferOwnership = async (req: AuthRequest, res: Response): Promis
       res.status(404).json({ message: "Target user does not exist in the system database." });
       return;
     }
-    // =========================================================
 
     const household = await Household.findOne({ owner: userId });
     if (!household) {
@@ -374,7 +343,6 @@ export const transferOwnership = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // 100% Retained exact storage mutations and socket events
     household.owner = newOwnerId;
     await household.save();
 
