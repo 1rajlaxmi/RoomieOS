@@ -5,7 +5,7 @@ import { AuthRequest } from "../middleware/authMiddleware";
 import sendEmail from "../utils/sendEmail";
 import { getIO } from "../socket";
 import { Types } from "mongoose";
-import User from "../models/User"; // We need this to get your roommates' email addresses
+import User from "../models/User";
 
 // @desc    Add a new expense and split it equally
 // @route   POST /api/expenses
@@ -30,7 +30,7 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
 
     // 2. The Math: Divide the amount by the number of roommates
     const totalMembers = household.members.length;
-    const splitAmount = parsedAmount / totalMembers; // ✅ FIXED: Using parsedAmount consistently
+    const splitAmount = parsedAmount / totalMembers;
 
     // 3. Create the splits array
     const splits = household.members.map((memberId) => {
@@ -46,7 +46,7 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
     // 4. Save the expense to the database
     const expense = await Expense.create({
       description,
-      amount: parsedAmount, // ✅ FIXED: Using parsedAmount consistently
+      amount: parsedAmount,
       paidBy: req.user?._id as any,
       household: household._id as any,
       splits
@@ -56,7 +56,6 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
     const populatedHousehold = await Household.findById(household._id).populate("members", "name email");
     
     if (populatedHousehold) {
-      // ✅ FIXED: Map email delivery promises to resolve them deterministically
       const emailPromises = populatedHousehold.members.map(async (member: any) => {
         if (member._id.toString() !== req.user?._id.toString()) {
           try {
@@ -69,19 +68,19 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
               ctaLink: "http://localhost:5173" 
             });
           } catch (emailErr) {
-            // Logs mail transport dropouts without breaking the database transaction or crashing server
             console.error(`[Mail Fail] Failed to notify ${member.email}:`, emailErr);
           }
         }
       });
 
-      // Wait until all mapped operations conclude entirely before returning
       await Promise.all(emailPromises);
     }
 
-    // ✅ Retained exact original Socket.io sync call
+    // ✅ FIXED: Dual-emitting global event to trigger immediate UI refreshes for roommates
     if (household) {
-      getIO().to(household._id.toString()).emit("expenses_data_changed");
+      const roomId = household._id.toString();
+      getIO().to(roomId).emit("expenses_data_changed");
+      getIO().to(roomId).emit("household_data_changed"); // 🔥 Fixed live sync
     }
     
     res.status(201).json(expense);
@@ -95,7 +94,6 @@ export const addExpense = async (req: AuthRequest, res: Response): Promise<void>
 // @access  Private
 export const getHouseholdExpenses = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    // 1. Find the user's household
     const household = await Household.findOne({ members: req.user?._id });
 
     if (!household) {
@@ -103,11 +101,10 @@ export const getHouseholdExpenses = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    // 2. Fetch all expenses linked to this household
     const expenses = await Expense.find({ household: household._id })
-      .populate("paidBy", "name email") // Get the name of who paid
-      .populate("splits.user", "name email") // Get the names of everyone who owes money
-      .sort({ date: -1 }); // Sort by newest first
+      .populate("paidBy", "name email")
+      .populate("splits.user", "name email")
+      .sort({ date: -1 });
 
     res.status(200).json(expenses);
   } catch (error) {
@@ -121,16 +118,12 @@ export const getHouseholdExpenses = async (req: AuthRequest, res: Response): Pro
 export const settleExpense = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { expenseId } = req.params;
-    const { userId } = req.body; // The ID of the roommate who paid their debt
+    const { userId } = req.body;
 
-    // =========================================================
-    // 🛡️ SECURITY GUARD: Sanitize input to prevent CastError/ID spoofing
-    // =========================================================
     if (!userId || typeof userId !== "string" || !Types.ObjectId.isValid(userId)) {
       res.status(400).json({ message: "Invalid user ID format provided for settlement." });
       return;
     }
-    // =========================================================
 
     const expense = await Expense.findById(expenseId);
 
@@ -139,25 +132,24 @@ export const settleExpense = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // SECURITY CHECK: Retained exact original check ensuring only the creator/payer marks it settled
     if (expense.paidBy.toString() !== req.user?._id.toString()) {
       res.status(403).json({ message: "Only the person who paid the bill can settle this debt." });
       return;
     }
 
-    // Find that specific roommate in the splits array
     const splitIndex = expense.splits.findIndex(
       (split) => split.user.toString() === userId
     );
 
     if (splitIndex !== -1) {
-      // Flip their status to true!
       expense.splits[splitIndex].isPaid = true;
       await expense.save();
 
-      // ✅ Retained exact original Socket.io real-time channel broadcast
+      // ✅ FIXED: Dual-emitting here too so balance widgets update in real-time when debt clears
       if (expense.household) {
-        getIO().to(expense.household.toString()).emit("expenses_data_changed");
+        const roomId = expense.household.toString();
+        getIO().to(roomId).emit("expenses_data_changed");
+        getIO().to(roomId).emit("household_data_changed"); // 🔥 Fixed live sync
       }
 
       res.status(200).json(expense);

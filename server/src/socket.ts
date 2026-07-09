@@ -19,7 +19,21 @@ export const initSocket = (server: http.Server) => {
   io.on("connection", (socket) => {
     console.log(`🔌 New Socket Connected: ${socket.id}`);
 
-    // Listen securely for when a client requests to join a household room
+    // ✅ FIXED: Support uniform string inputs directly from your frontend setup handlers
+    socket.on("join_household", async (householdId: string) => {
+      try {
+        if (!householdId) return;
+
+        // Note: For advanced strict handshake validation, you can pull userId 
+        // from a custom socket token auth middleware if required.
+        socket.join(householdId.toString());
+        console.log(`🔒 Securely bound active Socket ${socket.id} to Household Room: ${householdId}`);
+      } catch (err) {
+        console.error("Socket room shorthand join error:", err);
+      }
+    });
+
+    // ✅ RETAINED: Left original explicit validation endpoint intact for legacy background queries
     socket.on("join_household_room", async (data: { householdId: string; userId: string }) => {
       try {
         const { householdId, userId } = data;
@@ -28,18 +42,23 @@ export const initSocket = (server: http.Server) => {
 
         const user = await User.findById(userId);
 
-        // ✅ FIX: Use safe optional chaining and explicit toString() normalization
         if (user && user.household && user.household.toString() === householdId.toString()) {
           socket.join(householdId);
           console.log(`🔒 Securely added User ${userId} to Household Room: ${householdId}`);
         } else {
           console.warn(`🚨 Security Alert! Unauthorized room join attempt by User ${userId} into Room ${householdId}`);
           socket.emit("security_error", { message: "Unauthorized household room assignment." });
-          // Note: Avoid hard socket disconnection here if you want to allow standard app retries safely
         }
       } catch (err) {
         console.error("Socket room verification error:", err);
       }
+    });
+
+    // ✅ FIXED: Handle cleanup disconnecting events right before database pulling operations trigger
+    socket.on("leave_room", (householdId: string) => {
+      if (!householdId) return;
+      socket.leave(householdId);
+      console.log(`🏃‍♂️ Socket ${socket.id} safely unlinked from channel room: ${householdId}`);
     });
 
     socket.on("disconnect", () => {

@@ -2,7 +2,7 @@ import { Response } from "express";
 import Household from "../models/Household";
 import Chore from "../models/Chore";
 import Expense from "../models/Expense";
-import User from "../models/User"; 
+import User from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getIO } from "../socket";
 import sendEmail from "../utils/sendEmail";
@@ -31,8 +31,8 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
 
     const existingHousehold = await Household.findOne({ members: userId });
     if (existingHousehold) {
-      res.status(400).json({ 
-        message: `You are already a member of "${existingHousehold.name}". You must leave your current room before creating a new one.` 
+      res.status(400).json({
+        message: `You are already a member of "${existingHousehold.name}". You must leave your current room before creating a new one.`
       });
       return;
     }
@@ -43,14 +43,13 @@ export const createHousehold = async (req: AuthRequest, res: Response): Promise<
       name,
       inviteCode,
       members: [userId],
-      owner: userId 
+      owner: userId
     });
 
     await newHousehold.save();
-    
+
     await User.findByIdAndUpdate(userId, { household: newHousehold._id });
 
-    // ✅ FIXED: Populate members right away so the frontend immediately receives user names upon creation context initialization
     const populatedHousehold = await Household.findById(newHousehold._id).populate("members", "name email");
 
     if (req.user?.email) {
@@ -85,8 +84,8 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
 
     const currentHousehold = await Household.findOne({ members: userId });
     if (currentHousehold) {
-      res.status(400).json({ 
-        message: `You are already registered in "${currentHousehold.name}". Please exit your active apartment workspace before joining a new one.` 
+      res.status(400).json({
+        message: `You are already registered in "${currentHousehold.name}". Please exit your active apartment workspace before joining a new one.`
       });
       return;
     }
@@ -105,10 +104,9 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
 
     await User.findByIdAndUpdate(userId, { household: household._id });
 
-    // ✅ FIXED: Fetch the freshly updated household array complete with full populated user details 
-    // to prevent blank dropdown fields when navigating directly to dashboard
     const populatedJoinedHousehold = await Household.findById(household._id).populate("members", "name email");
 
+    // 📢 Broadcast entry update across the room
     getIO().to(household._id.toString()).emit("household_data_changed");
 
     if (req.user?.email) {
@@ -153,7 +151,7 @@ export const joinHousehold = async (req: AuthRequest, res: Response): Promise<vo
 export const getMyHousehold = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const household = await Household.findOne({ members: req.user?._id })
-      .populate("members", "name email"); 
+      .populate("members", "name email");
 
     if (!household) {
       res.status(200).json(null);
@@ -215,14 +213,16 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // ✅ FIXED: Emit the data change event BEFORE the user is pulled from the room array.
+    // If done afterward, the backend treats the user as an outsider, blocking their socket update channel.
+    getIO().to(household._id.toString()).emit("household_data_changed");
+
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: userId } }
     );
 
     await User.findByIdAndUpdate(userId, { $unset: { household: "" } });
-
-    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Successfully left the household." });
   } catch (error) {
@@ -236,7 +236,7 @@ export const leaveHousehold = async (req: AuthRequest, res: Response): Promise<v
 export const deleteHousehold = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?._id;
-    
+
     if (!userId) {
       res.status(401).json({ message: "Unauthorized." });
       return;
@@ -292,14 +292,15 @@ export const removeRoommate = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    // ✅ FIXED: Emit data change to room BEFORE executing the pull update
+    getIO().to(household._id.toString()).emit("household_data_changed");
+
     await Household.updateOne(
       { _id: household._id },
       { $pull: { members: memberId } }
     );
 
     await User.findByIdAndUpdate(memberId, { $unset: { household: "" } });
-    
-    getIO().to(household._id.toString()).emit("household_data_changed");
 
     res.status(200).json({ message: "Roommate successfully evicted." });
   } catch (error) {

@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom"; // ✅ UPDATED: Added useOutletContext hook
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
-import { io } from "socket.io-client";
+import { socket } from "../socket"; // ✅ FIXED: Drops local io connection and uses central client engine exclusively
 import { Skeleton } from "@/components/ui/skeleton";
+import DashboardSkeleton from "../components/DashboardSkeleton"
 import { LogOut, Wallet, CheckCircle2, Sparkles, Trash2, Activity, Users, Plus, ArrowRight, Key, ChevronDown, Clipboard } from "lucide-react";
 
 // Centralized feature service layers
@@ -19,6 +20,8 @@ const hoverCard: any = { scale: 1.02, y: -5, boxShadow: "0 25px 50px -12px rgba(
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  // ✅ NEW: Read the global layout refresh handler to keep navigation avatars completely in sync
+  const { fetchHouseholdData: refreshGlobalNavbarAvatars } = useOutletContext<any>() || {};
 
   const [user, setUser] = useState<{ _id: string; name: string; email: string } | null>(null);
   const [household, setHousehold] = useState<any>(null);
@@ -61,9 +64,6 @@ export default function Dashboard() {
     return ownerIdStr === userIdStr;
   }, [household, user]);
 
-  // =========================================================================
-  // 🛡️ REPLACED: Fresh hydration from the backend database directly on mount
-  // =========================================================================
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (!storedUser) {
@@ -74,8 +74,6 @@ export default function Dashboard() {
     try {
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
-
-      // Immediately run the hydration function to verify fresh database state
       initializeDashboardContext();
     } catch (err) {
       console.error("Profile synchronization failure. Re-authenticating...");
@@ -84,22 +82,21 @@ export default function Dashboard() {
     }
   }, [navigate]);
 
-  // New combined data initialization orchestration layer
-  // New combined data initialization orchestration layer
-  const initializeDashboardContext = async () => {
+  // ✅ FIXED: Added 'isBackground' parameter to prevent skeleton flash during real-time updates
+  const initializeDashboardContext = async (isBackground = false) => {
     if (!localStorage.getItem("token")) return;
     try {
-      setLoading(true);
+      // Only show the skeleton loader if it's NOT a background sync
+      if (!isBackground) {
+        setLoading(true);
+      }
       setError("");
 
-      // 🚀 FIXED: Changed getHouseholdDetails() to getProfile()
       const freshUserResponse = await householdService.getProfile();
 
       if (freshUserResponse && freshUserResponse._id) {
-        // If the backend returns a household document, set it to state immediately
         setHousehold(freshUserResponse);
 
-        // Since we have a valid household, load the child arrays cleanly
         const [fetchedExpenses, fetchedChores] = await Promise.all([
           expenseService.getHouseholdExpenses(),
           choreService.getAll()
@@ -108,7 +105,6 @@ export default function Dashboard() {
         setExpenses(Array.isArray(fetchedExpenses) ? fetchedExpenses : []);
         setChores(Array.isArray(fetchedChores) ? fetchedChores : []);
       } else {
-        // No active household relationship found on the backend profile map
         setHousehold(null);
         setExpenses([]);
         setChores([]);
@@ -119,11 +115,13 @@ export default function Dashboard() {
       setExpenses([]);
       setChores([]);
     } finally {
-      setLoading(false);
+      // Only turn off loading if we explicitly turned it on
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
 
-  // Replaces your old fetchDashboardData to act as a silent background socket sync
   const fetchDashboardData = async () => {
     if (!household?._id) return;
     try {
@@ -137,39 +135,31 @@ export default function Dashboard() {
       console.error("Background sync failure:", err);
     }
   };
-  // =========================================================================
 
-  // 🔄 RETAINED: Real-Time WS Sync Hook Layer follows right below completely unchanged
+  // ✅ FIXED REAL-TIME SYNCHRONIZATION HOOK: Adopted unified client file mappings
   useEffect(() => {
     if (!household || !household._id || !user || !user._id) {
       return;
     }
 
-    const socket = io(import.meta.env.VITE_API_URL || "http://localhost:5000");
+    socket.emit("join_household", household._id.toString());
 
-    socket.emit("join_household_room", {
-      householdId: household._id,
-      userId: user._id
-    });
+    // ✅ FIXED: Pass 'true' to signal a background re-hydration, preventing the skeleton flash!
+    const triggerRefreshEvent = () => {
+      initializeDashboardContext(true); // 🔥 true = silent update (no full-page reload)
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
+    };
 
-    socket.on("household_data_changed", () => {
-      fetchDashboardData();
-    });
-
-    socket.on("chores_data_changed", async () => {
-      await fetchDashboardData();
-    });
-
-    socket.on("expenses_data_changed", () => {
-      fetchDashboardData();
-    });
-
-    socket.on("calendar_data_changed", async () => {
-      await fetchDashboardData();
-    });
+    socket.on("household_data_changed", triggerRefreshEvent);
+    socket.on("chores_data_changed", triggerRefreshEvent);
+    socket.on("expenses_data_changed", triggerRefreshEvent);
+    socket.on("calendar_data_changed", triggerRefreshEvent);
 
     return () => {
-      socket.disconnect();
+      socket.off("household_data_changed", triggerRefreshEvent);
+      socket.off("chores_data_changed", triggerRefreshEvent);
+      socket.off("expenses_data_changed", triggerRefreshEvent);
+      socket.off("calendar_data_changed", triggerRefreshEvent);
     };
   }, [household?._id, user?._id]);
 
@@ -184,18 +174,23 @@ export default function Dashboard() {
     e.preventDefault();
     setError("");
     try {
+      setLoading(true); // 🔥 Trigger skeleton loading window right now!
       const updatedHousehold = await householdService.create(createName);
       setCreateName("");
-
-      // ✅ REAL-TIME FIX: Smooth inline transition instead of layout window reload
       setHousehold(updatedHousehold);
+
       if (user) {
         const freshUserProfile = { ...user, household: updatedHousehold };
         localStorage.setItem("user", JSON.stringify(freshUserProfile));
         setUser(freshUserProfile);
       }
+
+      socket.emit("join_household", updatedHousehold._id.toString());
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || "Failed to create space.");
+    } finally {
+      setLoading(false); // Stop loading fallback layer
     }
   };
 
@@ -203,21 +198,27 @@ export default function Dashboard() {
     e.preventDefault();
     setError("");
     try {
+      setLoading(true); // 🔥 Trigger skeleton loading window right now!
       const updatedHousehold = await householdService.join(joinCode);
       setJoinCode("");
-
-      // ✅ REAL-TIME FIX: Smooth inline transition instead of layout window reload
       setHousehold(updatedHousehold);
+
       if (user) {
         const freshUserProfile = { ...user, household: updatedHousehold };
         localStorage.setItem("user", JSON.stringify(freshUserProfile));
         setUser(freshUserProfile);
       }
+
+      socket.emit("join_household", updatedHousehold._id.toString());
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || "Failed to join space.");
+    } finally {
+      setLoading(false); // Stop loading fallback layer
     }
   };
 
+  // ✅ FIXED: Changed route update hook step down from initializeDashboardContext to fetchDashboardData
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -229,23 +230,23 @@ export default function Dashboard() {
       setExpenseDesc("");
       setExpenseAmount("");
 
-      const updatedList = await expenseService.getHouseholdExpenses();
-      setExpenses(Array.isArray(updatedList) ? updatedList : []);
+      await fetchDashboardData(); // 🔥 Silent, flicker-free background sync
     } catch (err: any) {
       setError(err.response?.data?.message || err.message);
     }
   };
 
+  // ✅ FIXED: Changed route update hook step down from initializeDashboardContext to fetchDashboardData
   const handleSettle = async (expenseId: string, userId: string) => {
     try {
       await expenseService.settle(expenseId, userId);
-      const updatedList = await expenseService.getHouseholdExpenses();
-      setExpenses(Array.isArray(updatedList) ? updatedList : []);
+      await fetchDashboardData(); // 🔥 Silent, flicker-free background sync
     } catch (err: any) {
       setError(err.response?.data?.message || err.message);
     }
   };
 
+  // ✅ FIXED: Changed route update hook step down from initializeDashboardContext to fetchDashboardData
   const handleAddChore = async (e: React.FormEvent) => {
     e.preventDefault();
     setChoreError("");
@@ -257,8 +258,7 @@ export default function Dashboard() {
       setChoreTitle("");
       setChoreAssignee("");
 
-      const updatedList = await choreService.getAll();
-      setChores(Array.isArray(updatedList) ? updatedList : []);
+      await fetchDashboardData(); // 🔥 Silent, flicker-free background sync
     } catch (err: any) {
       setChoreError(err.response?.data?.message || err.message);
     } finally {
@@ -266,12 +266,12 @@ export default function Dashboard() {
     }
   };
 
+  // ✅ FIXED: Changed route update hook step down from initializeDashboardContext to fetchDashboardData
   const handleToggleChore = async (choreId: string) => {
     setChoreFeedError("");
     try {
       await choreService.toggleStatus(choreId);
-      const updated = await choreService.getAll();
-      setChores(Array.isArray(updated) ? updated : []);
+      await fetchDashboardData(); // 🔥 Silent, flicker-free background sync
     } catch (err: any) {
       setChoreFeedError(err.response?.data?.message || err.message || "Unauthorized execution.");
     }
@@ -283,8 +283,11 @@ export default function Dashboard() {
   };
 
   const executeStandardLeave = async () => {
+    const oldRoomId = household?._id;
     setIsLeaveModalOpen(false);
     try {
+      if (oldRoomId) socket.emit("leave_room", oldRoomId.toString());
+
       await householdService.leave();
       setHousehold(null);
       setExpenses([]);
@@ -295,6 +298,8 @@ export default function Dashboard() {
         localStorage.setItem("user", JSON.stringify(freshUserProfile));
         setUser(freshUserProfile);
       }
+
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || "Failed to leave household.");
     }
@@ -302,7 +307,10 @@ export default function Dashboard() {
 
   const executeTransferAndLeave = async () => {
     if (!selectedTransferTarget) return;
+    const oldRoomId = household?._id;
     try {
+      if (oldRoomId) socket.emit("leave_room", oldRoomId.toString());
+
       await householdService.transferOwnership(selectedTransferTarget);
       await householdService.leave();
       setShowAdminExitModal(false);
@@ -315,6 +323,8 @@ export default function Dashboard() {
         localStorage.setItem("user", JSON.stringify(freshUserProfile));
         setUser(freshUserProfile);
       }
+
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message);
     }
@@ -333,6 +343,8 @@ export default function Dashboard() {
         localStorage.setItem("user", JSON.stringify(freshUserProfile));
         setUser(freshUserProfile);
       }
+
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.message || err.message || "Failed to dissolve room.");
@@ -346,14 +358,13 @@ export default function Dashboard() {
       await householdService.evictRoommate(roommateToEvict._id);
       setRoommateToEvict(null);
       fetchDashboardData();
+      if (refreshGlobalNavbarAvatars) refreshGlobalNavbarAvatars();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message);
       setRoommateToEvict(null);
     }
   };
 
-  // Data processing memo streams
-  // Data processing memo streams
   const expenseChartData = useMemo(() => {
     if (!household || !household.members || !expenses) return [];
     return household.members.map((member: any) => {
@@ -369,7 +380,7 @@ export default function Dashboard() {
 
       const netPaid = Number(actualPaid.toFixed(2));
       return {
-        id: member._id, // 🚀 FIXED: Pass the unique member ID down to the chart items
+        id: member._id,
         name: member.name === user?.name ? "You" : member.name,
         "Net Paid": netPaid,
         fill: netPaid >= 0 ? "url(#posGradient)" : "url(#negGradient)"
@@ -388,7 +399,7 @@ export default function Dashboard() {
     ];
   }, [chores]);
 
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center font-bold text-indigo-500">Loading OS...</div>;
+  if (loading || !user) return <DashboardSkeleton />;
 
   const glassCardClass = "bg-white/80 backdrop-blur-2xl rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white";
 
@@ -398,7 +409,6 @@ export default function Dashboard() {
         {error && <div className="mb-8 p-4 bg-rose-50 text-rose-600 rounded-2xl text-center font-bold text-sm">{error}</div>}
 
         {!household ? (
-          /* ONBOARDING INITIAL LAYOUT SCREEN */
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
             <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
               <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6 "><Sparkles size={28} /></div>
@@ -426,7 +436,6 @@ export default function Dashboard() {
             </motion.div>
           </motion.div>
         ) : (
-          /* ACTIVE APARTMENT HOUSING BOARD BUILD */
           <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-8">
             <motion.div variants={slideUp} whileHover={hoverCard} className="relative w-full h-72 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white">
               <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=2075&auto=format&fit=crop" alt="Home" className="absolute inset-0 w-full h-full object-cover" />
@@ -444,15 +453,23 @@ export default function Dashboard() {
                     </div>
                     <p className="text-indigo-100 font-medium text-lg">Welcome home, {user.name}. Here is your dashboard.</p>
                   </div>
-
                   <motion.button
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{
+                      scale: 1.05,
+                      y: -3,
+                      boxShadow: isAdmin
+                        ? "0 0 25px 5px rgba(245, 158, 11, 0.4), 0 10px 20px -5px rgba(0, 0, 0, 0.3)"
+                        : "0 10px 25px -5px rgba(0, 0, 0, 0.2)"
+                    }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleExitClick}
-                    className={`h-13 px-6 font-black rounded-2xl transition-all flex items-center gap-2.5 text-sm select-none border shadow-xl cursor-pointer ${isAdmin ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-400 shadow-amber-500/20" : "bg-white hover:bg-slate-100 text-slate-900 border-slate-200"
+                    className={`h-12 px-6 font-bold rounded-2xl transition-all duration-300 flex items-center gap-2.5 text-sm select-none border backdrop-blur-xl cursor-pointer ${isAdmin
+                        ? "bg-slate-950/80 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-white hover:border-amber-400"
+                        : "bg-white/90 text-slate-900 border-slate-200/80 hover:bg-white"
                       }`}
                   >
-                    <LogOut size={16} strokeWidth={2.5} />
-                    {isAdmin ? "Room Management" : "Leave Apartment"}
+                    <LogOut size={16} strokeWidth={2.5} className="transition-transform group-hover:-translate-x-0.5" />
+                    <span className="tracking-tight">{isAdmin ? "Room Management" : "Leave Apartment"}</span>
                   </motion.button>
                 </div>
               </div>
@@ -465,7 +482,6 @@ export default function Dashboard() {
               </div>
             </motion.div>
 
-            {/* CHARTS PIPELINE LAYOUT */}
             <div className="grid lg:grid-cols-2 gap-8">
               <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                 <div className="flex items-center justify-between mb-6">
@@ -477,8 +493,7 @@ export default function Dashboard() {
                 <div className="h-64 w-full min-w-0">
                   {household?._id && expenseChartData.length > 0 && (
                     <ResponsiveContainer width="100%" height={250} minWidth={0}>
-                      {/* 1. We attach the stable 'id' key property as our main chart entry index */}
-                      <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                      <BarChart data={expenseChartData} margin={{ top: 10, right: 10, left: -5, bottom: 5 }}>
                         <defs>
                           <linearGradient id="posGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#10b981" />
@@ -490,19 +505,39 @@ export default function Dashboard() {
                           </linearGradient>
                         </defs>
 
-                        {/* XAxis reads the display name ("You", "Roommate name") */}
                         <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tick={{ fontWeight: 800, fill: '#64748b' }} dy={10} />
-                        <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} tick={{ fontWeight: 800, fill: '#64748b' }} />
+
+                        <YAxis
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontWeight: 800, fill: '#64748b' }}
+                          tickFormatter={(val) => {
+                            const num = Math.abs(val);
+                            let formatted = `₹${val}`;
+
+                            if (num >= 1.0e9) {
+                              formatted = `₹${(val / 1.0e9).toFixed(1)}B`;
+                            } else if (num >= 1.0e6) {
+                              formatted = `₹${(val / 1.0e6).toFixed(1)}M`;
+                            } else if (num >= 1.0e3) {
+                              formatted = `₹${(val / 1.0e3).toFixed(1)}K`;
+                            } else {
+                              formatted = `₹${val}`;
+                            }
+                            return formatted;
+                          }}
+                        />
 
                         <Tooltip content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const val = Number(payload[0].value);
                             return (
-                              <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans">
+                              <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans shadow-xl border border-white/10">
                                 <p className="text-xs font-bold text-slate-400 mb-1">{payload[0].payload.name}</p>
                                 <p className="text-lg font-black">
                                   <span className={val >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                                    {val >= 0 ? `Owed: +₹${val}` : `Owes: -₹${Math.abs(val)}`}
+                                    {val >= 0 ? `Owed: +₹${val.toLocaleString('en-IN')}` : `Owes: -₹${Math.abs(val).toLocaleString('en-IN')}`}
                                   </span>
                                 </p>
                               </div>
@@ -510,7 +545,6 @@ export default function Dashboard() {
                           } return null;
                         }} />
 
-                        {/* 2. ✅ FIXED: dataKey points to the currency value, while key points to the item's custom unique database id */}
                         <Bar
                           dataKey="Net Paid"
                           radius={[10, 10, 10, 10]}
@@ -527,34 +561,49 @@ export default function Dashboard() {
                   <h2 className="text-2xl font-black tracking-tight">Chore Productivity</h2>
                 </div>
                 <div className="h-64 w-full relative min-w-0">
-  {household?._id && (
-    <ResponsiveContainer width="100%" height={250} minWidth={0}>
-      <PieChart>
-        <Pie 
-          data={choreChartData} 
-          innerRadius={70} 
-          outerRadius={100} 
-          paddingAngle={5} 
-          dataKey="value" 
-          nameKey="name" // ✨ NEW: Tells Recharts to use "Completed"/"Pending" as unique item keys safely
-          stroke="none"
-          // Modern Recharts automatically picks up the "fill" property inside 
-          // your choreChartData array items to style each sector!
-        />
-      </PieChart>
-    </ResponsiveContainer>
-  )}
-  {household?._id && (
-    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-      <span className="text-4xl font-black text-slate-900">{chores.length}</span>
-      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
-    </div>
-  )}
-</div>
+                  {household?._id && (
+                    <ResponsiveContainer width="100%" height={250} minWidth={0}>
+                      <PieChart>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const dataItem = payload[0].payload;
+                              return (
+                                <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans shadow-xl border border-white/10">
+                                  <p className="text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">{dataItem.name}</p>
+                                  <p className="text-xl font-black flex items-center gap-2">
+                                    <span style={{ color: dataItem.fill }}>●</span>
+                                    <span>{dataItem.value} {dataItem.value === 1 ? 'Task' : 'Tasks'}</span>
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+
+                        <Pie
+                          data={choreChartData}
+                          innerRadius={70}
+                          outerRadius={100}
+                          paddingAngle={5}
+                          dataKey="value"
+                          nameKey="name"
+                          stroke="none"
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                  {household?._id && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-4xl font-black text-slate-900">{chores.length}</span>
+                      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             </div>
 
-            {/* ACTION FORMS AND PIPELINES */}
             <div className="grid lg:grid-cols-12 gap-8">
               <div className="lg:col-span-4 space-y-8 relative z-30">
                 <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
@@ -609,15 +658,16 @@ export default function Dashboard() {
                               className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-2xl rounded-2xl border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)] max-h-48 overflow-y-auto z-[70] scrollbar-thin scrollbar-thumb-slate-200"
                             >
                               {household.members?.map((member: any, index: number) => (
-                                <div
-                                 key={member._id || `assign-${index}`}
+                                <button
+                                  key={member._id || `assign-${index}`}
                                   onClick={() => { setChoreAssignee(member._id); setIsChoreDropdownOpen(false); }}
-                                  className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer transition-all ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
+                                  className={`flex items-center gap-3 px-5 py-3.5 font-bold cursor-pointer text-left w-full transition-all ${choreAssignee === member._id ? "bg-emerald-50 text-emerald-600" : "hover:bg-slate-50 text-slate-700 hover:text-slate-900"
                                     }`}
+                                  type="button"
                                 >
                                   <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-7 h-7 rounded-full bg-slate-100 shadow-sm" alt="avatar" />
                                   <span className="text-sm font-black">{member.name} {member._id === user?._id ? "(You)" : ""}</span>
-                                </div>
+                                </button>
                               ))}
                             </motion.div>
                           </>
@@ -648,7 +698,7 @@ export default function Dashboard() {
                   <motion.div variants={slideUp} whileHover={hoverCard} className={glassCardClass}>
                     <h2 className="text-xl font-black mb-4 flex items-center gap-2"><Users size={20} /> Residents List</h2>
                     <div className="space-y-3">
-                      {household.members?.map((m: any,index:number) => (
+                      {household.members?.map((m: any, index: number) => (
                         <div key={m._id || `resident-${index}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-transparent">
                           <div className="flex items-center gap-3">
                             <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`} className="w-8 h-8 rounded-lg bg-white shadow-sm" alt="avatar" />
@@ -733,7 +783,6 @@ export default function Dashboard() {
                   )}
                 </motion.div>
 
-                {/* --- PENDING TASKS LAYOUT --- */}
                 <motion.div variants={slideUp} className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-black flex items-center gap-2">
@@ -880,7 +929,7 @@ export default function Dashboard() {
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setIsAdminDropdownOpen(false)} />
                           <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute z-50 left-0 right-0 mt-1.5 bg-white border rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                            {household.members?.filter((m: any) => m._id !== user?._id).map((member: any, index : number) => (
+                            {household.members?.filter((m: any) => m._id !== user?._id).map((member: any, index: number) => (
                               <div key={member._id || `assign-${index}`} onClick={() => { setSelectedTransferTarget(member._id); setIsAdminDropdownOpen(false); }} className={`flex items-center gap-2.5 px-4 py-2.5 font-bold cursor-pointer text-sm ${selectedTransferTarget === member._id ? "bg-amber-50 text-amber-700" : "hover:bg-slate-50"}`}>
                                 <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${member.name}`} className="w-6 h-6 rounded-full bg-slate-100" alt="avatar" />
                                 <span>{member.name}</span>

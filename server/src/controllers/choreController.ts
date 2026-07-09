@@ -44,9 +44,11 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
       });
     }
 
-    // ✅ FIXED: Using the local 'household' variable we fetched at the top of this function
+    // ✅ FIXED: Emitting both events so that any component listening to global or specific updates triggers instantly
     if (household) {
-      getIO().to(household._id.toString()).emit("chores_data_changed");
+      const roomId = household._id.toString();
+      getIO().to(roomId).emit("chores_data_changed");
+      getIO().to(roomId).emit("household_data_changed"); // 🔥 Trigger global live dashboard updates
     }
     // ----------------------------------
     const updatedChoresList = await Chore.find({ household: household._id })
@@ -55,7 +57,6 @@ export const addChore = async (req: AuthRequest, res: Response): Promise<void> =
 
     // Send the complete array right back to the frontend in a single round-trip
     res.status(201).json(updatedChoresList);
-
 
   } catch (error) {
     res.status(500).json({ message: "Server error creating chore", error });
@@ -126,9 +127,11 @@ export const toggleChoreStatus = async (req: AuthRequest, res: Response): Promis
     chore.isCompleted = !chore.isCompleted;
     await chore.save();
 
-    // ✅ Retained your exact Socket.io update event logic
+    // ✅ FIXED: Emitting both events here as well so marking a chore as done reflects immediately on other screens
     if (chore.household) {
-      getIO().to(chore.household.toString()).emit("chores_data_changed");
+      const roomId = chore.household.toString();
+      getIO().to(roomId).emit("chores_data_changed");
+      getIO().to(roomId).emit("household_data_changed"); // 🔥 Trigger global live dashboard updates
     }
 
     res.status(200).json(chore);
