@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
 
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
 
   const isAdmin = useMemo(() => {
     if (!household || !user) return false;
@@ -222,6 +223,9 @@ export default function Dashboard() {
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsCreatingExpense(true); // 🔥 Start the activity loop skeleton loader instantly!
+      setError("");
+
       await expenseService.create({
         description: expenseDesc,
         amount: Number(expenseAmount)
@@ -230,9 +234,11 @@ export default function Dashboard() {
       setExpenseDesc("");
       setExpenseAmount("");
 
-      await fetchDashboardData(); // 🔥 Silent, flicker-free background sync
+      await fetchDashboardData();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message);
+    } finally {
+      setIsCreatingExpense(false); // 🧼 Turn off the isolated skeleton wrapper smoothly
     }
   };
 
@@ -464,8 +470,8 @@ export default function Dashboard() {
                     whileTap={{ scale: 0.98 }}
                     onClick={handleExitClick}
                     className={`h-12 px-6 font-bold rounded-2xl transition-all duration-300 flex items-center gap-2.5 text-sm select-none border backdrop-blur-xl cursor-pointer ${isAdmin
-                        ? "bg-slate-950/80 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-white hover:border-amber-400"
-                        : "bg-white/90 text-slate-900 border-slate-200/80 hover:bg-white"
+                      ? "bg-slate-950/80 text-amber-400 border-amber-500/40 hover:bg-amber-500 hover:text-white hover:border-amber-400"
+                      : "bg-white/90 text-slate-900 border-slate-200/80 hover:bg-white"
                       }`}
                   >
                     <LogOut size={16} strokeWidth={2.5} className="transition-transform group-hover:-translate-x-0.5" />
@@ -724,7 +730,27 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
+                  <div className="space-y-4"></div>
                   <AnimatePresence mode="popLayout">
+                    {/* ✅ FIXED: Beautiful local skeleton container item added right here */}
+                    {isCreatingExpense && (
+                      <motion.div
+                        key="single-expense-skeleton"
+                        initial={{ opacity: 0, height: 0, y: -20 }}
+                        animate={{ opacity: 1, height: "auto", y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className={glassCardClass + " !p-6 flex items-center justify-between border-dashed border-indigo-300 bg-indigo-50/10"}
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <Skeleton className="h-12 w-12 rounded-2xl bg-indigo-200/50 flex-shrink-0 animate-pulse" />
+                          <div className="space-y-2 flex-1">
+                            <Skeleton className="h-5 w-1/3 bg-slate-200 rounded-lg animate-pulse" />
+                            <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-md animate-pulse" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-7 w-20 bg-slate-200 rounded-xl flex-shrink-0 animate-pulse" />
+                      </motion.div>
+                    )}
                     {expenses.length === 0 ? (
                       <div className={glassCardClass + " text-center py-8 text-slate-400 font-bold text-sm"}>No recent bills logged.</div>
                     ) : (
