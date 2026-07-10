@@ -7,6 +7,7 @@ let io: Server;
 export const initSocket = (server: http.Server) => {
   io = new Server(server, {
     cors: {
+      // ✅ RETAINED: Reads process.env.FRONTEND_URL directly in production
       origin: process.env.FRONTEND_URL || "http://localhost:5173", 
       methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true 

@@ -172,7 +172,7 @@ export default function Register() {
               className="w-full h-14 rounded-2xl bg-gradient-to-r from-violet-600 via-pink-600 to-indigo-600 text-white font-bold 
               text-lg shadow-lg shadow-violet-600/20 hover:shadow-xl hover:shadow-violet-600/30 transition-all duration-150 cursor-pointer"
             >
-              Create Free Account
+              Create Account
             </MotionButton>
           </div>
         </form>
