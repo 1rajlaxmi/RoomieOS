@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react"; // ✅ UPDATED: Added useMemo import
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Variants } from "framer-motion";
@@ -35,7 +35,6 @@ export default function Layout() {
   const [members, setMembers] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  // ✅ NEW: Extracted data fetcher loop to re-call dynamically on backend web socket events
   const fetchHouseholdData = () => {
     const storedUser = localStorage.getItem("user");
     if (storedUser && storedUser !== "undefined") {
@@ -46,12 +45,10 @@ export default function Layout() {
       .then(data => {
         if (data && data.members) {
           setMembers(data.members);
-          // 🏠 Securely enter the real-time apartment room channel
           if (data._id) {
             socket.emit("join_household", data._id.toString());
           }
         } else {
-          // ✅ CRITICAL FIX: Wipe out face bubbles instantly if the user left the room
           setMembers([]);
         }
       })
@@ -62,17 +59,14 @@ export default function Layout() {
   };
 
   useEffect(() => {
-    // Initial fetch loop execution
     fetchHouseholdData();
 
-    // ✅ CRITICAL FIX: Attach global real-time event listener to update navbar elements instantly
     socket.on("household_data_changed", fetchHouseholdData);
 
-    // Clean up channel listeners safely on layer unmount to eliminate active memory leaks
     return () => {
       socket.off("household_data_changed", fetchHouseholdData);
     };
-  }, [location.pathname]); // Automatically runs if a teammate modifies data or shifts view routing channels
+  }, [location.pathname]);
 
   const handleLogout = () => {
     localStorage.clear();
@@ -81,11 +75,21 @@ export default function Layout() {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const navItems = [
-    { label: "Dashboard", path: "/dashboard", icon: <Layers size={18} /> },
-    { label: "House Scheduler", path: "/scheduler", icon: <CalendarDays size={18} /> },
-    { label: "Monthly Analytics", path: "/report-card", icon: <Users size={18} /> },
-  ];
+  // ✅ FIXED: Conditionally filter navigation links so outsiders can only see the Dashboard onboarding route
+  const navItems = useMemo(() => {
+    const items = [{ label: "Dashboard", path: "/dashboard", icon: <Layers size={18} /> }];
+    
+    // Evaluate if user is linked to an active home setup
+    const isResident = (members && members.length > 0) || (user && user.household);
+
+    if (isResident) {
+      items.push(
+        { label: "House Scheduler", path: "/scheduler", icon: <CalendarDays size={18} /> },
+        { label: "Monthly Analytics", path: "/report-card", icon: <Users size={18} /> }
+      );
+    }
+    return items;
+  }, [members, user]);
 
   return (
     <div className="min-h-screen font-sans flex flex-col relative overflow-clip text-slate-900 bg-slate-50">
@@ -108,16 +112,17 @@ export default function Layout() {
               </h1>
             </div>
 
-            {/* Inline Navigation Links (Hidden on Mobile viewports) */}
+            {/* Inline Navigation Links */}
             <div className="hidden md:flex items-center gap-6 text-sm font-bold">
               {navItems.map((item) => (
                 <span
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`cursor-pointer transition-all duration-200 py-1.5 px-3 rounded-xl relative ${isActive(item.path)
+                  className={`cursor-pointer transition-all duration-200 py-1.5 px-3 rounded-xl relative ${
+                    isActive(item.path)
                       ? "text-indigo-600 font-extrabold bg-indigo-50/50"
                       : "text-slate-500 hover:text-indigo-600 hover:bg-slate-50/60"
-                    }`}
+                  }`}
                 >
                   {item.label}
                 </span>
@@ -127,7 +132,6 @@ export default function Layout() {
 
           {/* Right Side Actions Container */}
           <div className="flex items-center gap-4">
-            {/* Avatar Stack + Identity Badge (Hidden on Mobile) */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="flex -space-x-3">
                 {members && members.length > 0 ? (
@@ -160,7 +164,6 @@ export default function Layout() {
               )}
             </div>
 
-            {/* Desktop Logout Button (Hidden on Mobile) */}
             <button
               onClick={handleLogout}
               className="hidden md:flex items-center gap-2 text-sm font-black text-slate-600 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 px-5 py-2.5 rounded-2xl border border-slate-100 hover:border-rose-100 transition-all cursor-pointer"
@@ -168,7 +171,6 @@ export default function Layout() {
               <LogOut size={16} /> Logout
             </button>
 
-            {/* Responsive Burger Action Trigger */}
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="md:hidden flex items-center justify-center p-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 active:scale-95 transition-all cursor-pointer"
@@ -188,7 +190,6 @@ export default function Layout() {
               exit="exit"
               className="absolute top-24 left-0 right-0 md:hidden bg-white/95 backdrop-blur-2xl rounded-3xl border border-white p-5 shadow-[0_20px_40px_rgba(0,0,0,0.08)] space-y-4"
             >
-              {/* Quick Profile Overview (Shows on small phone form-factors) */}
               {user && (
                 <div className="flex items-center gap-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-100 shadow-inner sm:hidden">
                   <img
@@ -203,17 +204,17 @@ export default function Layout() {
                 </div>
               )}
 
-              {/* Navigation Routes Mapping Stack */}
               <div className="flex flex-col gap-1.5">
                 {navItems.map((item) => (
                   <motion.div
                     variants={mobileItemVariants}
                     key={item.path}
                     onClick={() => { navigate(item.path); setIsOpen(false); }}
-                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-black text-sm cursor-pointer transition-all ${isActive(item.path)
+                    className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-black text-sm cursor-pointer transition-all ${
+                      isActive(item.path)
                         ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                      }`}
+                    }`}
                   >
                     {item.icon}
                     {item.label}
@@ -221,7 +222,6 @@ export default function Layout() {
                 ))}
               </div>
 
-              {/* Mobile Logout Trigger Block */}
               <motion.div variants={mobileItemVariants} className="pt-2 border-t border-slate-100">
                 <button
                   onClick={() => { setIsOpen(false); handleLogout(); }}
@@ -237,7 +237,7 @@ export default function Layout() {
 
       {/* SUB-PAGE MOUNT INTERACTION POINT */}
       <div className="flex-grow z-10">
-        <Outlet context={{ fetchHouseholdData }} /> {/* ✅ Pass downstream context handles */}
+        <Outlet context={{ fetchHouseholdData }} />
       </div>
 
       {/* GLOBAL FOOTER */}

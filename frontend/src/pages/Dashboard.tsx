@@ -571,11 +571,12 @@ export default function Dashboard() {
                     <ResponsiveContainer width="100%" height={250} minWidth={0}>
                       <PieChart>
                         <Tooltip
+                          wrapperStyle={{ zIndex: 1000 }}
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               const dataItem = payload[0].payload;
                               return (
-                                <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans shadow-xl border border-white/10">
+                                <div className="bg-slate-950/95 backdrop-blur-xl p-4 rounded-2xl text-white font-sans shadow-xl border border-white/10 relative z-[1000]">
                                   <p className="text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">{dataItem.name}</p>
                                   <p className="text-xl font-black flex items-center gap-2">
                                     <span style={{ color: dataItem.fill }}>●</span>
@@ -601,9 +602,11 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   )}
                   {household?._id && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-4xl font-black text-slate-900">{chores.length}</span>
-                      <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
+                      <div className="bg-white rounded-full w-[136px] h-[136px] flex flex-col items-center justify-center shadow-inner border border-slate-50/10">
+                        <span className="text-4xl font-black text-slate-900">{chores.length}</span>
+                        <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tasks</span>
+                      </div>
                     </div>
                   )}
                 </div>
