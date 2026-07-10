@@ -26,7 +26,14 @@ const app = express();
 const server = http.createServer(app)
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173", // Allows your frontend URL
+    credentials: true, // Crucial! Allows the browser to accept secure cookie/auth handshakes
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
 // =========================================================
@@ -57,28 +64,6 @@ app.use("/api/reports", reportRoutes);
 // ✅ Initialize the real-time socket cluster layer
 initSocket(server);
 
-// --- TEMPORARY TEST ROUTE ---
-// app.get("/api/test-email", async (req, res) => {
-//   try {
-//     await sendEmail({
-//       to: "put.your.actual.email.here@gmail.com", // <-- REPLACE THIS WITH YOUR REAL EMAIL!
-//       subject: "RoomieOS Engine Test",
-//       title: "🚀 Systems Online",
-//       body: "If you are reading this, your RoomieOS email engine is fully authorized and operational. Great job!",
-//       ctaText: "Let's Deploy",
-//       ctaLink: "http://localhost:5173"
-//     });
-//     res.send("Email fired! Go check your inbox.");
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send("Failed to send email. Check your server console.");
-//   }
-// });
-// ----------------------------
-
-// Your normal routes are down here...
-//app.use("/api/auth", authRoutes);
-// ...
 
 // Basic test route
 app.get("/", (req, res) => {
