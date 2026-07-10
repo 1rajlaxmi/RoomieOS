@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"; // ✅ Added Navigate
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -14,10 +14,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* ✅ FIXED: When someone hits exactly "/", automatically send them to "/login" */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-<Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
         {/* 🛡️ Protected Route Group */}
         <Route element={<ProtectedRoute />}>
@@ -31,8 +34,6 @@ export default function App() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
-
-
     </BrowserRouter>
   );
 }
