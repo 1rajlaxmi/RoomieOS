@@ -28,5 +28,5 @@ Want to run RoomieOS locally? Follow these quick steps:
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git](https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git)
+git clone [[https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git](https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git)](https://github.com/1rajlaxmi/RoomieOS/tree/main)
 cd RoomieOS
