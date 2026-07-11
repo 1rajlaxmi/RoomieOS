@@ -21,12 +21,3 @@ A sleek, full-stack web application designed for roommates to manage shared metr
 | **Backend** | Node.js, Express, WebSockets (`socket.io`), Express Rate Limit |
 | **Database** | MongoDB Atlas (Mongoose ORM) |
 | **Hosting** | Vercel (Frontend Site), Render (Backend API Web Service) |
-
-## 📦 Local Installation & Setup
-
-Want to run RoomieOS locally? Follow these quick steps:
-
-### 1. Clone the Repository
-```bash
-git clone [[https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git](https://github.com/YOUR_GITHUB_USERNAME/RoomieOS.git)](https://github.com/1rajlaxmi/RoomieOS/tree/main)
-cd RoomieOS
