@@ -145,7 +145,7 @@ export default function Login() {
               to="/forgot-password" 
               className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors tracking-tight underline decoration-1 underline-offset-4"
             >
-              Forgot Password?
+              {/* Forgot Password? */}
             </Link>
           </motion.div>
 
